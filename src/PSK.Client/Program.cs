@@ -8,12 +8,11 @@ namespace PSK.Client
     {
         static void Main(string[] args)
         {
-            Console.ReadKey();
             string server = "localhost";
             var client = new TcpClient("localhost", 21020);
             var stream = client.GetStream();
 
-            string message = "TEST\n";
+            string message = "ping TEST\n";
             byte[] data = Encoding.ASCII.GetBytes(message);
 
             stream.Write(data, 0, data.Length);
@@ -30,7 +29,7 @@ namespace PSK.Client
             while (stream.DataAvailable);
 
             Console.WriteLine("Pobrane: {0}", responseStr);
-            Console.ReadKey();
+            Console.Read();
         }
     }
 }

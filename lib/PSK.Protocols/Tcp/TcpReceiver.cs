@@ -31,28 +31,33 @@ namespace PSK.Protocols.Tcp
 
         public async Task Receive()
         {
+            var sb = new StringBuilder();
+            var client = listener.AcceptTcpClient();
+            var stream = client.GetStream();
+            var buffer = new byte[4000];
             while(!cancellationToken.IsCancellationRequested)
             {
-                byte[] bytes = new byte[256];
-                TcpClient client = listener.AcceptTcpClient();
-                string data = null;
-                int len, nl;
-                NetworkStream stream = client.GetStream();
-                while ((len = stream.Read(bytes, 0, bytes.Length)) > 0)
+                var dataLength = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                while (dataLength > 0)
                 {
-                    data += Encoding.ASCII.GetString(bytes, 0, len);
-                    while ((nl = data.IndexOf('\n')) != -1)
+                    sb.Append(Encoding.ASCII.GetString(buffer, 0, dataLength));
+                    if(sb[sb.Length - 1] == '\n')
                     {
-                        string line = data.Substring(0, nl + 1);
-                        data = data.Substring(nl + 1);
-                        byte[] msg = Encoding.ASCII.GetBytes("YOLO");
-                        stream.Write(msg, 0, msg.Length);
-                    }
-                }
+                        sb.Remove(sb.Length - 1, 1); //Removing '/n' from the end
+                        var request = sb.ToString().Split(' ');
+                        var command = request[0];
+                        var data = request[1];
 
-                Console.WriteLine(data);
-                client.Close();
+                        byte[] msg = Encoding.ASCII.GetBytes($"Received: {command} {data}");
+                        stream.Write(msg, 0, msg.Length);
+
+                        sb.Clear();
+                    }
+                    dataLength = 0;
+                    Array.Clear(buffer, 0, buffer.Length);
+                }
             }
+            client.Close();
         }
 
         public void Start()
