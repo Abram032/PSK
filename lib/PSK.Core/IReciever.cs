@@ -3,10 +3,10 @@ using System.Threading.Tasks;
 
 namespace PSK.Core
 {
-    public interface IReciever
+    public interface IReceiver
     {
         void Start();
         void Stop();
-        Task Recieve();
+        Task Receive();
     }
 }

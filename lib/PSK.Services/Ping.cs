@@ -1,4 +1,4 @@
-﻿using PSK.Core;
+﻿using PSK.Core.Server;
 using System;
 
 namespace PSK.Services
