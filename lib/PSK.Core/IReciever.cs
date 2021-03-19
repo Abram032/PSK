@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using PSK.Core.Models;
 
 namespace PSK.Core
 {
@@ -8,5 +9,7 @@ namespace PSK.Core
         void Start();
         void Stop();
         Task Receive();
+
+        event EventHandler<OnReceivedEventArgs> OnReceived;
     }
 }

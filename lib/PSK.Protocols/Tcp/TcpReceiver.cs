@@ -1,4 +1,5 @@
 ﻿using PSK.Core;
+using PSK.Core.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,6 +24,8 @@ namespace PSK.Protocols.Tcp
             cancellationTokenSource = new CancellationTokenSource();
         }
 
+        public event EventHandler<OnReceivedEventArgs> OnReceived;
+
         public void Dispose()
         {
             Stop();
@@ -44,12 +47,16 @@ namespace PSK.Protocols.Tcp
                     if(sb[sb.Length - 1] == '\n')
                     {
                         sb.Remove(sb.Length - 1, 1); //Removing '/n' from the end
-                        var request = sb.ToString().Split(' ');
-                        var command = request[0];
-                        var data = request[1];
+                        // var request = sb.ToString().Split(' ');
+                        // var command = request[0];
+                        // var data = request[1];
 
-                        byte[] msg = Encoding.ASCII.GetBytes($"Received: {command} {data}");
-                        stream.Write(msg, 0, msg.Length);
+                        OnReceived?.Invoke(this, new OnReceivedEventArgs{
+                            Data = sb.ToString(),
+                            Timestamp = DateTime.UtcNow
+                        });
+                        // byte[] msg = Encoding.ASCII.GetBytes($"Received: {command} {data}");
+                        // stream.Write(msg, 0, msg.Length);
 
                         sb.Clear();
                     }
