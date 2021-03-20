@@ -1,6 +1,7 @@
 ﻿using PSK.Core;
 using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -8,19 +9,30 @@ namespace PSK.Protocols.Tcp
 {
     public class TcpTransmitter : ITransmitter
     {
-        public void Start()
+        private TcpClient _client;
+        public TcpTransmitter(TcpClient client)
         {
-            throw new NotImplementedException();
+            _client = client;
         }
 
-        public void Stop()
+        public void Transmit(string data)
         {
-            throw new NotImplementedException();
+            if(!_client.Connected)
+            {
+                return;
+            }
+
+            var stream = _client.GetStream();
+
+            byte[] response = Encoding.ASCII.GetBytes($"{data}");
+
+            stream.Write(response, 0, response.Length);
         }
 
-        public Task Transmit()
+        public void Dispose()
         {
-            throw new NotImplementedException();
+            _client.Close();
+            _client.Dispose();
         }
     }
 }

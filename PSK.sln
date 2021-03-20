@@ -15,9 +15,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PSK.Services", "lib\PSK.Ser
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PSK.Protocols", "lib\PSK.Protocols\PSK.Protocols.csproj", "{362819B2-3046-4243-806C-E2EA986BCE51}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PSK.Core.Server", "lib\PSK.Core.Server\PSK.Core.Server.csproj", "{04EFC8EA-6ECC-4C36-A05F-5DF2D16EF5E4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PSK.Core.Server", "lib\PSK.Core.Server\PSK.Core.Server.csproj", "{04EFC8EA-6ECC-4C36-A05F-5DF2D16EF5E4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PSK.Client", "src\PSK.Client\PSK.Client.csproj", "{DBD8E9F5-1283-40A0-9388-CA871E780AB9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PSK.Client", "src\PSK.Client\PSK.Client.csproj", "{DBD8E9F5-1283-40A0-9388-CA871E780AB9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PSK.Services.Models", "lib\PSK.Services.Models\PSK.Services.Models.csproj", "{D14074BE-8137-4514-A27B-72C48560D326}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -49,6 +51,10 @@ Global
 		{DBD8E9F5-1283-40A0-9388-CA871E780AB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DBD8E9F5-1283-40A0-9388-CA871E780AB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DBD8E9F5-1283-40A0-9388-CA871E780AB9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D14074BE-8137-4514-A27B-72C48560D326}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D14074BE-8137-4514-A27B-72C48560D326}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D14074BE-8137-4514-A27B-72C48560D326}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D14074BE-8137-4514-A27B-72C48560D326}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -60,6 +66,7 @@ Global
 		{362819B2-3046-4243-806C-E2EA986BCE51} = {73043066-3808-4765-B08A-0277161BCF4F}
 		{04EFC8EA-6ECC-4C36-A05F-5DF2D16EF5E4} = {73043066-3808-4765-B08A-0277161BCF4F}
 		{DBD8E9F5-1283-40A0-9388-CA871E780AB9} = {9A78C728-D4BD-4C2E-A81D-430302AB7B87}
+		{D14074BE-8137-4514-A27B-72C48560D326} = {73043066-3808-4765-B08A-0277161BCF4F}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {91B4EBB1-4B3F-45B6-94F0-074F9AFAF8E5}

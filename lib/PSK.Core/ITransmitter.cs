@@ -5,10 +5,8 @@ using System.Threading.Tasks;
 
 namespace PSK.Core
 {
-    public interface ITransmitter
+    public interface ITransmitter : IDisposable
     {
-        void Start();
-        void Stop();
-        Task Transmit();
+        void Transmit(string data);
     }
 }

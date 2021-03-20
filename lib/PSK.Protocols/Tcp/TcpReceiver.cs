@@ -1,4 +1,6 @@
-﻿using PSK.Core;
+﻿using Microsoft.Extensions.Configuration;
+using PSK.Core;
+using PSK.Core.Enums;
 using PSK.Core.Models;
 using System;
 using System.Collections.Generic;
@@ -11,13 +13,13 @@ using System.Threading.Tasks;
 
 namespace PSK.Protocols.Tcp
 {
-    public class TcpReceiver : IReceiver, IDisposable
+    public class TcpReceiver : IReceiver
     {
         private TcpListener listener;
         private CancellationToken cancellationToken;
         private CancellationTokenSource cancellationTokenSource;
-        private bool isListening = false;
-        public TcpReceiver()
+
+        public TcpReceiver(IConfiguration configuration)
         {
             var tcpPort = 21020;
             listener = new TcpListener(IPAddress.Any, tcpPort);
@@ -25,6 +27,8 @@ namespace PSK.Protocols.Tcp
         }
 
         public event EventHandler<OnReceivedEventArgs> OnReceived;
+        public event EventHandler<OnConnectedEventArgs> OnConnected;
+        public event EventHandler<OnDisconnectedEventArgs> OnDisconnected;
 
         public void Dispose()
         {
@@ -32,56 +36,68 @@ namespace PSK.Protocols.Tcp
             cancellationTokenSource.Dispose();
         }
 
-        public async Task Receive()
+        public void Listen()
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var client = listener.AcceptTcpClient();
+                var clientId = Guid.NewGuid();
+                OnConnected?.Invoke(this, new OnConnectedEventArgs
+                {
+                    ClientId = clientId,
+                    Client = client,
+                    ClientType = ClientType.TCP
+                });
+
+                Task.Factory.StartNew(() => Receive(clientId, client), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            }
+        }
+
+        public async Task Receive(Guid clientId, TcpClient client)
         {
             var sb = new StringBuilder();
-            var client = listener.AcceptTcpClient();
             var stream = client.GetStream();
             var buffer = new byte[4000];
-            while(!cancellationToken.IsCancellationRequested)
+            while(client.Connected)
             {
+                if(!stream.DataAvailable || !stream.CanRead)
+                {
+                    continue;
+                }
                 var dataLength = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
                 while (dataLength > 0)
                 {
                     sb.Append(Encoding.ASCII.GetString(buffer, 0, dataLength));
-                    if(sb[sb.Length - 1] == '\n')
+                    if (sb[sb.Length - 1] == '\n')
                     {
                         sb.Remove(sb.Length - 1, 1); //Removing '/n' from the end
-                        // var request = sb.ToString().Split(' ');
-                        // var command = request[0];
-                        // var data = request[1];
 
-                        OnReceived?.Invoke(this, new OnReceivedEventArgs{
-                            Data = sb.ToString(),
-                            Timestamp = DateTime.UtcNow
+                        OnReceived?.Invoke(this, new OnReceivedEventArgs
+                        {
+                            ClientId = clientId,
+                            Data = sb.ToString()
                         });
-                        // byte[] msg = Encoding.ASCII.GetBytes($"Received: {command} {data}");
-                        // stream.Write(msg, 0, msg.Length);
-
                         sb.Clear();
                     }
                     dataLength = 0;
                     Array.Clear(buffer, 0, buffer.Length);
                 }
             }
-            client.Close();
+            OnDisconnected?.Invoke(this, new OnDisconnectedEventArgs
+            {
+                ClientId = clientId
+            });
         }
 
         public void Start()
         {
             listener.Start();
             cancellationToken = cancellationTokenSource.Token;
-            Task.Factory.StartNew(() => Receive(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-            isListening = true;
+            Task.Factory.StartNew(() => Listen(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         public void Stop()
         {
-            if(!isListening)
-            {
-                return;
-            }
-            isListening = false;
             cancellationTokenSource.Cancel();
             listener.Stop();
         }

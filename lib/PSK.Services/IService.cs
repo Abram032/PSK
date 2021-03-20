@@ -1,12 +1,13 @@
-﻿using System;
+﻿using PSK.Core.Models;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PSK.Core.Server
+namespace PSK.Services
 {
     public interface IService
     {
-        Task HandleRequest(OnReceivedEventArgs arguments);
+        Task<string> HandleRequest(string request);
     }
 }

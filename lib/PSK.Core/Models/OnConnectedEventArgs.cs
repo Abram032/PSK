@@ -1,14 +1,15 @@
+﻿using PSK.Core.Enums;
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace PSK.Core.Models
 {
-    public class OnReceivedEventArgs : EventArgs
+    public class OnConnectedEventArgs : EventArgs
     {
         public Guid ClientId { get; set; }
-        public string Data { get; set; }
+        public object Client { get; set; }
+        public ClientType ClientType { get; set; }
     }
 }

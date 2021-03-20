@@ -5,8 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PSK.Core.Server\PSK.Core.Server.csproj" />
     <ProjectReference Include="..\PSK.Core\PSK.Core.csproj" />
+    <ProjectReference Include="..\PSK.Services.Models\PSK.Services.Models.csproj" />
   </ItemGroup>
 
 </Project>

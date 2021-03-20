@@ -6,5 +6,6 @@ namespace PSK.Core.Server
 {
     public interface IServer
     {
+
     }
 }

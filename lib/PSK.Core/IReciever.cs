@@ -4,12 +4,13 @@ using PSK.Core.Models;
 
 namespace PSK.Core
 {
-    public interface IReceiver
+    public interface IReceiver : IDisposable
     {
         void Start();
         void Stop();
-        Task Receive();
 
         event EventHandler<OnReceivedEventArgs> OnReceived;
+        event EventHandler<OnConnectedEventArgs> OnConnected;
+        event EventHandler<OnDisconnectedEventArgs> OnDisconnected;
     }
 }
