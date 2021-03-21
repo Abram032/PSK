@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace PSK.Server.Models
+namespace PSK.Core.Models
 {
     public class Request
     {

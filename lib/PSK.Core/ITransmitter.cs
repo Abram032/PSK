@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 namespace PSK.Core
 {
     public interface ITransmitter : IDisposable
     {
-        void Transmit(string data);
+        void Start(object client);
+        void Stop();
+        Task Transmit(string data);
     }
 }

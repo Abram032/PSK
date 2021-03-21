@@ -1,10 +1,11 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 namespace PSK.Server
 {
     public interface IServer : IDisposable
     {
         void Start();
-        void Stop();
+        Task Stop();
     }
 }

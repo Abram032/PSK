@@ -17,8 +17,12 @@ namespace PSK.Client
             byte[] data = Encoding.ASCII.GetBytes(message);
 
             var sentAt = DateTime.Now;
-            stream.Write(data, 0, data.Length);
-            Console.WriteLine($"Sent: {message}");
+            int i = 0;
+            while(i++ < 100)
+            {
+                stream.Write(data, 0, data.Length);
+                Console.WriteLine($"Sent: {message}");
+            }          
 
             byte[] response = new byte[256];
             string responseStr = string.Empty;

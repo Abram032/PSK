@@ -1,43 +1,55 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PSK.Core;
+using System;
+using System.IO.Pipelines;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace PSK.Protocols.Tcp
 {
-    public class TcpTransmitter : ITransmitter
+    public interface ITcpTransmitter : ITransmitter { }
+    public class TcpTransmitter : ITcpTransmitter
     {
-        private readonly TcpClient _client;
+        private TcpClient _client;
         private readonly ILogger _logger;
-        private readonly IConfiguration _configuration;
-        //TODO: IOptions needed
-        //IConfiguration configuration, ILogger<TcpTransmitter> logger, 
-        public TcpTransmitter(TcpClient client)
+        public TcpTransmitter(ILogger<TcpTransmitter> logger)
         {
-            _client = client;
-            //_configuration = configuration;
-            //_logger = logger;
+            _logger = logger;
         }
 
-        public void Transmit(string data)
+        public void Start(object client)
         {
-            if(!_client.Connected)
+            _client = client as TcpClient;
+            if(_client == null)
             {
+                _logger.LogWarning($"{nameof(TcpTransmitter)} received invalid client type");
+                return;
+            }
+        }
+
+        public async Task Transmit(string data)
+        {
+            if (!_client.Connected)
+            {
+                _logger.LogWarning($"Unable to send data, client already disconnected");
                 return;
             }
 
-            var stream = _client.GetStream();
+            ReadOnlyMemory<byte> response = Encoding.ASCII.GetBytes($"{data}");
+            await _client.GetStream().WriteAsync(response);
+        }
 
-            byte[] response = Encoding.ASCII.GetBytes($"{data}");
-
-            stream.Write(response, 0, response.Length);
+        public void Stop()
+        {
+            _client.GetStream().Close();
+            _client.Close();
         }
 
         public void Dispose()
         {
-            _client.GetStream().Close();
-            _client.Close();
+            Stop();
             _client.Dispose();
         }
     }

@@ -1,8 +1,10 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PSK.Core;
 using PSK.Protocols.Tcp;
 using PSK.Services;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PSK.Server
@@ -32,14 +34,24 @@ namespace PSK.Server
                         options.TimestampFormat = "hh:mm:ss ";
                     });
                 })
+                //Options configuration
+                .Configure<TcpReceiverOptions>(configuration.GetSection($"Protocols:TCP:{nameof(TcpReceiverOptions)}"))
+                .Configure<RequestChannelOptions>(configuration.GetSection(nameof(RequestChannelOptions)))
+                .Configure<ServerOptions>(configuration.GetSection(nameof(ServerOptions)))
+                //Channel
+                .AddSingleton<IRequestChannel, RequestChannel>()
+                //Receivers
+                .AddSingleton<ITcpReceiver, TcpReceiver>()
+                //Transmitters
+                .AddTransient<ITcpTransmitter, TcpTransmitter>()
+                //Services
+                .AddSingleton<IPingService, PingService>()
                 //Server
                 .AddSingleton<IServer, Server>()
-                //Protocols
-                .AddSingleton<ITcpReceiver, TcpReceiver>()
-                //.AddSingleton<ITcpTransmitter, TcpTransmitter>()
-                //Services
-                .AddTransient<IPingService, PingService>()
                 .BuildServiceProvider();
+
+            var cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = cancellationTokenSource.Token;
 
             var server = serviceProvider.GetRequiredService<IServer>();
 
