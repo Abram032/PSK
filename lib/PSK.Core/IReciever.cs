@@ -1,6 +1,5 @@
-﻿using System;
-using System.Threading.Tasks;
-using PSK.Core.Models;
+﻿using PSK.Core.Models;
+using System;
 
 namespace PSK.Core
 {

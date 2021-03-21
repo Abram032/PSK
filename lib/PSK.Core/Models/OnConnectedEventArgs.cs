@@ -1,8 +1,4 @@
-﻿using PSK.Core.Enums;
-using System;
-using System.Collections.Generic;
-using System.Net.Sockets;
-using System.Text;
+﻿using System;
 
 namespace PSK.Core.Models
 {
@@ -10,6 +6,5 @@ namespace PSK.Core.Models
     {
         public Guid ClientId { get; set; }
         public object Client { get; set; }
-        public ClientType ClientType { get; set; }
     }
 }

@@ -9,9 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PSK.Core.Server\PSK.Core.Server.csproj" />
     <ProjectReference Include="..\PSK.Core\PSK.Core.csproj" />
-    <ProjectReference Include="..\PSK.Services.Models\PSK.Services.Models.csproj" />
   </ItemGroup>
 
 </Project>

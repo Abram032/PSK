@@ -1,10 +1,8 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using PSK.Core;
-using PSK.Core.Enums;
 using PSK.Core.Models;
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -13,17 +11,31 @@ using System.Threading.Tasks;
 
 namespace PSK.Protocols.Tcp
 {
-    public class TcpReceiver : IReceiver
+    public interface ITcpReceiver : IReceiver { }
+    public class TcpReceiver : ITcpReceiver
     {
-        private TcpListener listener;
-        private CancellationToken cancellationToken;
-        private CancellationTokenSource cancellationTokenSource;
+        private readonly TcpListener listener;
+        private readonly CancellationToken cancellationToken;
+        private readonly CancellationTokenSource cancellationTokenSource;
 
-        public TcpReceiver(IConfiguration configuration)
+        private readonly IConfiguration _configuration;
+        private readonly ILogger _logger;
+
+        public TcpReceiver(IConfiguration configuration, ILogger<TcpReceiver> logger)
         {
-            var tcpPort = 21020;
+            _configuration = configuration;
+            _logger = logger;
+
+            if (!int.TryParse(configuration["Protocols:TCP:ListenPort"], out int tcpPort))
+            {
+                _logger.LogError($"Could not parse TCP port '{configuration["Protocols:TCP:ListenPort"]}' to int");
+                return;
+            }
+
+            _logger.LogDebug($"Configuring TCP listener on port: {tcpPort}");
             listener = new TcpListener(IPAddress.Any, tcpPort);
             cancellationTokenSource = new CancellationTokenSource();
+            cancellationToken = cancellationTokenSource.Token;
         }
 
         public event EventHandler<OnReceivedEventArgs> OnReceived;
@@ -38,15 +50,22 @@ namespace PSK.Protocols.Tcp
 
         public void Listen()
         {
+            _logger.LogDebug($"TCP Listener started");
             while (!cancellationToken.IsCancellationRequested)
             {
-                var client = listener.AcceptTcpClient();
+                //TODO: How to close TcpClient properly and get notified
+                int.TryParse(_configuration["Protocols:TCP:ReceiveTimeout"], out int receiveTimeout);
+                int.TryParse(_configuration["Protocols:TCP:SendTimeout"], out int sendTimeout);
                 var clientId = Guid.NewGuid();
+                var client = listener.AcceptTcpClient();
+                client.ReceiveTimeout = receiveTimeout;
+                client.SendTimeout = sendTimeout;
+                client.LingerState = new LingerOption(true, 15);
+
                 OnConnected?.Invoke(this, new OnConnectedEventArgs
                 {
                     ClientId = clientId,
-                    Client = client,
-                    ClientType = ClientType.TCP
+                    Client = client
                 });
 
                 Task.Factory.StartNew(() => Receive(clientId, client), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -91,15 +110,23 @@ namespace PSK.Protocols.Tcp
 
         public void Start()
         {
+            _logger.LogDebug("Starting TCP Receiver");
+            if(listener == null)
+            {
+                _logger.LogError("Could not start TCP listener");
+                return;
+            }
             listener.Start();
-            cancellationToken = cancellationTokenSource.Token;
             Task.Factory.StartNew(() => Listen(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            _logger.LogDebug("TCP Receiver started");
         }
 
         public void Stop()
         {
+            _logger.LogDebug("Stopping TCP Receiver");
             cancellationTokenSource.Cancel();
             listener.Stop();
+            _logger.LogDebug("TCP Receiver stopped");
         }
     }
 }

@@ -1,18 +1,23 @@
-﻿using PSK.Core;
-using System;
-using System.Collections.Generic;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using PSK.Core;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace PSK.Protocols.Tcp
 {
     public class TcpTransmitter : ITransmitter
     {
-        private TcpClient _client;
+        private readonly TcpClient _client;
+        private readonly ILogger _logger;
+        private readonly IConfiguration _configuration;
+        //TODO: IOptions needed
+        //IConfiguration configuration, ILogger<TcpTransmitter> logger, 
         public TcpTransmitter(TcpClient client)
         {
             _client = client;
+            //_configuration = configuration;
+            //_logger = logger;
         }
 
         public void Transmit(string data)
@@ -31,6 +36,7 @@ namespace PSK.Protocols.Tcp
 
         public void Dispose()
         {
+            _client.GetStream().Close();
             _client.Close();
             _client.Dispose();
         }

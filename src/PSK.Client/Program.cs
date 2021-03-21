@@ -1,22 +1,24 @@
 ﻿using System;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace PSK.Client
 {
     class Program
     {
-        static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             string server = "localhost";
-            var client = new TcpClient("localhost", 21020);
+            var client = new TcpClient(server, 21021);
             var stream = client.GetStream();
 
-            string message = "ping TEST\n";
+            string message = "ping Test\n";
             byte[] data = Encoding.ASCII.GetBytes(message);
 
+            var sentAt = DateTime.Now;
             stream.Write(data, 0, data.Length);
-            Console.Write("Wysłane: {0}", message);
+            Console.WriteLine($"Sent: {message}");
 
             byte[] response = new byte[256];
             string responseStr = string.Empty;
@@ -27,9 +29,16 @@ namespace PSK.Client
                 responseStr += Encoding.ASCII.GetString(response, 0, bytes);
             }
             while (stream.DataAvailable);
+            var receivedAt = DateTime.Now;
 
-            Console.WriteLine("Pobrane: {0}", responseStr);
-            Console.Read();
+            var difference = receivedAt - sentAt;
+
+            Console.WriteLine($"Received: {responseStr}");
+            Console.WriteLine($"Time: {difference.Milliseconds} ms");
+            client.GetStream().Close();
+            client.Close();
+            //client.Client.DisconnectAsync(new SocketAsyncEventArgs());
+            //client.Dispose();
         }
     }
 }

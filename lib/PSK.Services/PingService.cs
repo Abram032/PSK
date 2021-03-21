@@ -1,13 +1,13 @@
-﻿using Newtonsoft.Json;
-using PSK.Services.Models;
-using System;
+﻿using PSK.Services.Models;
 using System.Threading.Tasks;
 
 namespace PSK.Services
 {
     [Command("ping")]
-    public class PingService : IService
+    public interface IPingService : IService { }
+
+    public class PingService : IPingService
     {
-        public async Task<string> HandleRequest(string request) => request;
+        public async Task<string> ProcessRequest(string request) => request;
     }
 }

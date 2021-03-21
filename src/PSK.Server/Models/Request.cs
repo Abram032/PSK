@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 
-namespace PSK.Core.Models
+namespace PSK.Server.Models
 {
-    public class OnReceivedEventArgs : EventArgs
+    public class Request
     {
         public Guid ClientId { get; set; }
         public string Data { get; set; }
