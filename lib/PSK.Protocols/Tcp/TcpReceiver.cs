@@ -73,23 +73,37 @@ namespace PSK.Protocols.Tcp
         private async Task Receive(Guid clientId, TcpClient client)
         {
             var reader = PipeReader.Create(client.GetStream());
-            while(client.Connected || !cancellationToken.IsCancellationRequested)
+            try
             {
-                ReadResult result = await reader.ReadAsync(cancellationToken);
-                ReadOnlySequence<byte> buffer = result.Buffer;
-
-                while (TryReadLine(ref buffer, out ReadOnlySequence<byte> line))
+                while (client.Connected && !cancellationToken.IsCancellationRequested)
                 {
-                    await ProcessLine(clientId, line);
-                }
+                    ReadResult result = await reader.ReadAsync(cancellationToken);
+                    ReadOnlySequence<byte> buffer = result.Buffer;
 
-                reader.AdvanceTo(buffer.Start, buffer.End);
+                    while (TryReadLine(ref buffer, out ReadOnlySequence<byte> line))
+                    {
+                        if (!client.Connected)
+                        {
+                            break;
+                        }
+                        await ProcessLine(clientId, line);
+                    }
+
+                    reader.AdvanceTo(buffer.Start, buffer.End);
+                }
             }
-            await reader.CompleteAsync();
-            OnDisconnected?.Invoke(this, new OnDisconnectedEventArgs
+            catch(Exception e)
             {
-                ClientId = clientId
-            });
+                _logger.LogError(e.Message);
+            }
+            finally
+            {
+                await reader.CompleteAsync();
+                OnDisconnected?.Invoke(this, new OnDisconnectedEventArgs
+                {
+                    ClientId = clientId
+                });
+            }
         }
 
         private bool TryReadLine(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> line)

@@ -31,19 +31,24 @@ namespace PSK.Protocols.Tcp
 
         public async Task Transmit(string data)
         {
-            if (!_client.Connected)
+            try
             {
-                _logger.LogWarning($"Unable to send data, client already disconnected");
-                return;
+                ReadOnlyMemory<byte> response = Encoding.ASCII.GetBytes($"{data}");
+                await _client.GetStream().WriteAsync(response);
             }
-
-            ReadOnlyMemory<byte> response = Encoding.ASCII.GetBytes($"{data}");
-            await _client.GetStream().WriteAsync(response);
+            catch(Exception e)
+            {
+                _logger.LogError(e.Message);
+                Dispose();
+            }
         }
 
         public void Stop()
         {
-            _client.GetStream().Close();
+            if(_client.Connected)
+            {
+                _client.GetStream().Close();
+            }
             _client.Close();
         }
 

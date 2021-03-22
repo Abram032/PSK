@@ -34,7 +34,11 @@ namespace PSK.Core
                 requestChannel = Channel.CreateUnbounded<Request>();
             }
         }
-        public ValueTask WriteAsync(Request request, CancellationToken token = default) => requestChannel.Writer.WriteAsync(request, token);
+        public async ValueTask WriteAsync(Request request, CancellationToken token = default)
+        {
+            await requestChannel.Writer.WriteAsync(request, token);
+            _logger.LogInformation($"Request received from client '{request.ClientId}'");
+        }
         public ValueTask<bool> WaitToWriteAsync(CancellationToken token = default) => requestChannel.Writer.WaitToWriteAsync(token);
         public ValueTask<Request> ReadAsync(CancellationToken token = default) => requestChannel.Reader.ReadAsync(token);
         public ValueTask<bool> WaitToReadAsync(CancellationToken token = default) => requestChannel.Reader.WaitToReadAsync(token);

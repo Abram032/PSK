@@ -21,6 +21,7 @@ namespace PSK.Server
         private IReadOnlyList<IReceiver> receivers;
         private ConcurrentDictionary<Guid, ITransmitter> transmitters;
         private IReadOnlyDictionary<string, Type> serviceTypes;
+        private List<Task> workerThreads = new List<Task>();
 
         private CancellationToken cancellationToken;
         private CancellationTokenSource cancellationTokenSource;
@@ -82,7 +83,7 @@ namespace PSK.Server
                 receiver.Start();
             }
 
-            for(int i = 0; i < _options.Value.RequestWorkers; i++)
+            for (int i = 0; i < _options.Value.RequestWorkers; i++)
             {
                 Task.Factory.StartNew(() => RequestWorker(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
@@ -113,13 +114,9 @@ namespace PSK.Server
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                //while (await _requestChannel.WaitToReadAsync(cancellationToken))
-                //{
-                await foreach (var request in _requestChannel.ReadAllAsync(cancellationToken))
+                while (await _requestChannel.WaitToReadAsync(cancellationToken))
                 {
-                        //var request = await _requestChannel.ReadAsync(cancellationToken);
-                    _logger.LogInformation($"Request received from client '{request.ClientId}'");
-                    //_logger.LogDebug($"Processing request for client '{request.ClientId}'");
+                    var request = await _requestChannel.ReadAsync(cancellationToken);
 
                     if (!transmitters.TryGetValue(request.ClientId, out var transmitter))
                     {
@@ -127,32 +124,35 @@ namespace PSK.Server
                         continue;
                     }
 
-                    var arguments = request.Data.Split(' ');
-                    if(arguments.Length != 2)
+                    try
                     {
-                        _logger.LogWarning($"Bad request from client '{request.ClientId}'. Invalid amount of arguments.");
-                        await transmitter.Transmit("Bad request. Invalid amount of arguments!");
-                        continue;
-                    }
-                    var command = arguments.FirstOrDefault();
-                    var data = arguments.LastOrDefault();
+                        var arguments = request.Data.Split(' ');
+                        if (arguments.Length != 2)
+                        {
+                            _logger.LogWarning($"Bad request from client '{request.ClientId}'. Invalid amount of arguments.");
+                            await transmitter.Transmit("Bad request. Invalid amount of arguments!");
+                            continue;
+                        }
+                        var command = arguments.FirstOrDefault();
+                        var data = arguments.LastOrDefault();
 
-                    //_logger.LogDebug($"Processing '{command}' command for client '{request.ClientId}' ({data.Length} bytes)");
-                    if (!serviceTypes.TryGetValue(command, out var serviceType))
+                        if (!serviceTypes.TryGetValue(command, out var serviceType))
+                        {
+                            var reason = $"Could not find service for '{command}' command.";
+                            _logger.LogWarning($"Processing '{command}' command for client '{request.ClientId}' failed. {reason}");
+                            await transmitter.Transmit(reason);
+                            continue;
+                        }
+
+                        var service = _serviceProvider.GetService(serviceType) as IService;
+                        var serviceResponse = await service.ProcessRequest(data);
+
+                        await transmitter.Transmit(serviceResponse);
+                    }
+                    catch (Exception e)
                     {
-                        var reason = $"Could not find service for '{command}' command.";
-                        _logger.LogWarning($"Processing '{command}' command for client '{request.ClientId}' failed. {reason}");
-                        await transmitter.Transmit(reason);
-                        continue;
+                        _logger.LogError(e.Message);
                     }
-
-                    var service = _serviceProvider.GetService(serviceType) as IService;
-                    var serviceResponse = await service.ProcessRequest(data);
-                    //_logger.LogDebug($"Processed '{command}' command for client '{request.ClientId}'");
-                    
-                    //_logger.LogDebug($"Sending response to client '{request.ClientId}' ({serviceResponse.Length} bytes)");
-                    await transmitter.Transmit(serviceResponse);
-                    //_logger.LogDebug($"Response sent to client '{request.ClientId}'");
                 }
             }
         }
