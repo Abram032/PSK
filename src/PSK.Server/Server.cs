@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PSK.Core;
 using PSK.Core.Models;
@@ -125,6 +126,7 @@ namespace PSK.Server
 
                     try
                     {
+                        //TODO: Move splitting part of command/data to stream pipeline
                         var arguments = request.Data.Split(' ');
                         if (arguments.Length != 2)
                         {
@@ -134,7 +136,8 @@ namespace PSK.Server
                         }
                         var command = arguments.FirstOrDefault();
                         var data = arguments.LastOrDefault();
-
+                        
+                        //TODO: Move to separate method and return only answer to transmit whether service is available and returns response or not
                         if (!serviceTypes.TryGetValue(command, out var serviceType))
                         {
                             var reason = $"Could not find service for '{command}' command.";
@@ -156,8 +159,11 @@ namespace PSK.Server
             }
         }
 
+
+
         private void OnConnected(object sender, OnConnectedEventArgs e)
         {
+            //TODO: Remove and create Transreceiver in Listener
             string protocol = null;
             switch (e.Client)
             {

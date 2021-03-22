@@ -14,6 +14,7 @@ namespace PSK.Protocols.Tcp
     {
         private TcpClient _client;
         private readonly ILogger _logger;
+        //TODO: Rebuild and allow to transmit and receive requests, rename to ITcpTransreceiver
         public TcpTransmitter(ILogger<TcpTransmitter> logger)
         {
             _logger = logger;
@@ -21,6 +22,7 @@ namespace PSK.Protocols.Tcp
 
         public void Start(object client)
         {
+            //TODO: If possible move to constructor
             _client = client as TcpClient;
             if(_client == null)
             {

@@ -69,6 +69,7 @@ namespace PSK.Protocols.Tcp
             }
         }
 
+        //TOOD: Allow only listening in class, rename to ITcpListener or something around that
         private async Task Receive(Guid clientId, TcpClient client)
         {
             var reader = PipeReader.Create(client.GetStream());
@@ -76,6 +77,7 @@ namespace PSK.Protocols.Tcp
             {
                 while (client.Connected && !cancellationToken.IsCancellationRequested)
                 {
+                    //TODO: Optimize to read only if data is available instead of reading in loop
                     ReadResult result = await reader.ReadAsync(cancellationToken);
                     ReadOnlySequence<byte> buffer = result.Buffer;
 
@@ -121,6 +123,7 @@ namespace PSK.Protocols.Tcp
 
         private async ValueTask ProcessLine(Guid clientId, ReadOnlySequence<byte> line)
         {
+            //TODO: Slice out command from data
             var stringBuilder = new StringBuilder();
             foreach(var segment in line)
             {

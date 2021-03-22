@@ -50,6 +50,8 @@ namespace PSK.Server
                 .AddSingleton<IServer, Server>()
                 .BuildServiceProvider();
 
+            //TODO: Allow to remove/add dynamically available services depending on ConfigurationService
+
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
 

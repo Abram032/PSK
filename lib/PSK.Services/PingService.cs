@@ -8,6 +8,7 @@ namespace PSK.Services
 
     public class PingService : IPingService
     {
+        //TODO: Accept size of response
         public async Task<string> ProcessRequest(string request) => request;
     }
 }
