@@ -21,7 +21,6 @@ namespace PSK.Server
         private IReadOnlyList<IReceiver> receivers;
         private ConcurrentDictionary<Guid, ITransmitter> transmitters;
         private IReadOnlyDictionary<string, Type> serviceTypes;
-        private List<Task> workerThreads = new List<Task>();
 
         private CancellationToken cancellationToken;
         private CancellationTokenSource cancellationTokenSource;
@@ -165,8 +164,8 @@ namespace PSK.Server
                 case TcpClient client:
                     protocol = "TCP";
                     var trasnmitter = _serviceProvider.GetService(typeof(ITcpTransmitter)) as ITcpTransmitter;
-                    transmitters.TryAdd(e.ClientId, trasnmitter);
                     trasnmitter.Start(client);
+                    transmitters.TryAdd(e.ClientId, trasnmitter);
                     break;
                 default:
                     protocol = "unknown";

@@ -8,7 +8,6 @@ namespace PSK.Core
         void Start();
         void Stop();
 
-        //event EventHandler<OnReceivedEventArgs> OnReceived;
         event EventHandler<OnConnectedEventArgs> OnConnected;
         event EventHandler<OnDisconnectedEventArgs> OnDisconnected;
     }

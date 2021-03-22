@@ -31,7 +31,6 @@ namespace PSK.Protocols.Tcp
             _requestChannel = requestChannel;
         }
 
-        //public event EventHandler<OnReceivedEventArgs> OnReceived;
         public event EventHandler<OnConnectedEventArgs> OnConnected;
         public event EventHandler<OnDisconnectedEventArgs> OnDisconnected;
 
