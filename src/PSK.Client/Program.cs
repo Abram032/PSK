@@ -41,6 +41,7 @@ namespace PSK.Client
 
             Console.WriteLine($"Received: {responseStr}");
             Console.WriteLine($"Time: {stopwatch.ElapsedMilliseconds} ms");
+            //await Task.Delay(-1);
             client.GetStream().Close();
             client.Close();
             //client.Client.DisconnectAsync(new SocketAsyncEventArgs());

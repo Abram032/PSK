@@ -40,11 +40,11 @@ namespace PSK.Protocols.Tcp
             cancellationTokenSource.Dispose();
         }
 
+        //TOOD: Allow only listening in class, rename to ITcpListener or something around that
         private void Listen()
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                //TODO: How to close TcpClient properly and get notified
                 try
                 {
                     var clientId = Guid.NewGuid();
@@ -69,24 +69,24 @@ namespace PSK.Protocols.Tcp
             }
         }
 
-        //TOOD: Allow only listening in class, rename to ITcpListener or something around that
+        //TODO: Move to Transrecveiver
         private async Task Receive(Guid clientId, TcpClient client)
         {
             var reader = PipeReader.Create(client.GetStream());
             try
             {
-                while (client.Connected && !cancellationToken.IsCancellationRequested)
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    //TODO: Optimize to read only if data is available instead of reading in loop
                     ReadResult result = await reader.ReadAsync(cancellationToken);
+                    if(result.IsCompleted)
+                    {
+                        //Client disconnected
+                        break;
+                    }
                     ReadOnlySequence<byte> buffer = result.Buffer;
 
                     while (TryReadLine(ref buffer, out ReadOnlySequence<byte> line))
                     {
-                        if (!client.Connected)
-                        {
-                            break;
-                        }
                         await ProcessLine(clientId, line);
                     }
 
@@ -123,19 +123,39 @@ namespace PSK.Protocols.Tcp
 
         private async ValueTask ProcessLine(Guid clientId, ReadOnlySequence<byte> line)
         {
-            //TODO: Slice out command from data
+            SequencePosition? position = line.PositionOf((byte)' ');
+            if(!position.HasValue)
+            {
+                //Discard read line, incomplete request
+                //TODO: Send response
+                return;
+            }
+
+            var command = line.Slice(0, position.Value);
+            var data = line.Slice(line.GetPosition(1, position.Value));
+
+            //Build command
             var stringBuilder = new StringBuilder();
-            foreach(var segment in line)
+            foreach(var segment in command)
+            {
+                stringBuilder.Append(Encoding.ASCII.GetString(segment.Span).ToLower());
+            }
+            var parsedCommand = stringBuilder.ToString();
+            //Build data
+            stringBuilder.Clear();
+            foreach (var segment in data)
             {
                 stringBuilder.Append(Encoding.ASCII.GetString(segment.Span));
             }
+            var parsedData = stringBuilder.ToString();
 
-            while(await _requestChannel.WaitToWriteAsync(cancellationToken))
+            while (await _requestChannel.WaitToWriteAsync(cancellationToken))
             {
                 await _requestChannel.WriteAsync(new Request
                 {
                     ClientId = clientId,
-                    Data = stringBuilder.ToString()
+                    Command = parsedCommand,
+                    Data = parsedData
                 });
                 return;
             }
