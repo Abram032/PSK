@@ -112,7 +112,7 @@ namespace PSK.Protocols.Tcp
             SequencePosition? position = line.PositionOf((byte)' ');
             if (!position.HasValue)
             {
-                await Transmit("Bad request.");
+                await Transmit("Bad request. Invalid amount of arguments.");
                 return;
             }
 

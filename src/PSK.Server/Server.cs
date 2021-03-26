@@ -115,28 +115,17 @@ namespace PSK.Server
 
                     try
                     {
-                        //TODO: Move splitting part of command/data to stream pipeline
-                        var arguments = request.Data.Split(' ');
-                        if (arguments.Length != 2)
-                        {
-                            _logger.LogWarning($"Bad request from client '{request.ClientId}'. Invalid amount of arguments.");
-                            await client.Transceiver.Transmit("Bad request. Invalid amount of arguments!");
-                            continue;
-                        }
-                        var command = arguments.FirstOrDefault();
-                        var data = arguments.LastOrDefault();
-                        
                         //TODO: Move to separate method and return only answer to transmit whether service is available and returns response or not
-                        if (!serviceTypes.TryGetValue(command, out var serviceType))
+                        if (!serviceTypes.TryGetValue(request.Command, out var serviceType))
                         {
-                            var reason = $"Could not find service for '{command}' command.";
-                            _logger.LogWarning($"Processing '{command}' command for client '{request.ClientId}' failed. {reason}");
+                            var reason = $"Could not find service for '{request.Command}' command.";
+                            _logger.LogWarning($"Processing '{request.Command}' command for client '{request.ClientId}' failed. {reason}");
                             await client.Transceiver.Transmit(reason);
                             continue;
                         }
 
                         var service = _serviceProvider.GetService(serviceType) as IService;
-                        var serviceResponse = await service.ProcessRequest(data);
+                        var serviceResponse = await service.ProcessRequest(request.Data);
 
                         await client.Transceiver.Transmit(serviceResponse);
                     }
