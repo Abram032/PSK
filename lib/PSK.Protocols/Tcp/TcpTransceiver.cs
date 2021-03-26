@@ -149,15 +149,19 @@ namespace PSK.Protocols.Tcp
         public void Stop()
         {
             _logger.LogInformation($"Client '{Id}' disconnected");
-            cancellationTokenSource.Cancel();
-            client.GetStream().Close();
-            client.Close();
             _clientService.RemoveClient(Id);
+            if(client.Connected)
+            {
+                client.GetStream().Close();
+            }
+            client.Close();
+            cancellationTokenSource.Cancel();
         }
 
         public void Dispose()
         {
             client.Dispose();
+            cancellationTokenSource.Dispose();
         }
     }
 }

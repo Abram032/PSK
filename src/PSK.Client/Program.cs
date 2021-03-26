@@ -22,11 +22,13 @@ namespace PSK.Client
             var sentAt = DateTime.Now;
             int i = 0;
             stream.Write(data, 0, data.Length);
-            // while(i++ < 100000)
-            // {
-            //     stream.Write(data, 0, data.Length);
-            //     Console.WriteLine($"Sent: {message}");
-            // }          
+            while(i++ < 1005000000)
+            {
+                stream.Write(data, 0, data.Length);
+                //Console.WriteLine($"Sent: {message}");
+            }
+
+            await Task.Delay(15000);
 
             byte[] response = new byte[256];
             string responseStr = string.Empty;
@@ -41,7 +43,7 @@ namespace PSK.Client
 
             Console.WriteLine($"Received: {responseStr}");
             Console.WriteLine($"Time: {stopwatch.ElapsedMilliseconds} ms");
-            //await Task.Delay(-1);
+            await Task.Delay(-1);
             client.GetStream().Close();
             client.Close();
             //client.Client.DisconnectAsync(new SocketAsyncEventArgs());

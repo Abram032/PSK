@@ -35,7 +35,7 @@ namespace PSK.Server
                     });
                 })
                 //Options configuration
-                .Configure<TcpListener>(configuration.GetSection($"Protocols:TCP:{nameof(TcpListenerOptions)}"))
+                .Configure<TcpListenerOptions>(configuration.GetSection(nameof(TcpListenerOptions)))
                 .Configure<RequestChannelOptions>(configuration.GetSection(nameof(RequestChannelOptions)))
                 .Configure<ServerOptions>(configuration.GetSection(nameof(ServerOptions)))
                 //Client Service

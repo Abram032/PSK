@@ -1,11 +1,13 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PSK.Core;
+using PSK.Core.Models;
 using PSK.Protocols.Tcp;
 using PSK.Services;
 using PSK.Services.Models;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -26,6 +28,9 @@ namespace PSK.Server
         private readonly IServiceProvider _serviceProvider;
         private readonly IRequestChannel _requestChannel;
         private readonly IClientService _clientService;
+
+        public static long RequestsProcessed { get; set; }
+        public static Stopwatch sw { get; set; } = new Stopwatch();
 
         public Server(IOptions<ServerOptions> options, ILogger<Server> logger, IRequestChannel requestChannel, 
             IServiceProvider serviceProvider, IClientService clientService)
@@ -87,11 +92,11 @@ namespace PSK.Server
         {
             _logger.LogInformation("Stopping server");
 
-            //TODO: Clear clients
             foreach (var listener in listeners)
             {
                 listener.Stop();
             }
+            _clientService.ClearClients();
             await _requestChannel.ClearAsync(cancellationToken);
             cancellationTokenSource.Cancel();
 
@@ -104,6 +109,12 @@ namespace PSK.Server
             {
                 while (await _requestChannel.WaitToReadAsync(cancellationToken))
                 {
+                    RequestsProcessed++;
+                    if(RequestsProcessed >= 1000000)
+                    {
+                        sw.Stop();
+                    }
+                    sw.Start();
                     var request = await _requestChannel.ReadAsync(cancellationToken);
                     var client = _clientService.GetClientById(request.ClientId);
 
@@ -115,19 +126,8 @@ namespace PSK.Server
 
                     try
                     {
-                        //TODO: Move to separate method and return only answer to transmit whether service is available and returns response or not
-                        if (!serviceTypes.TryGetValue(request.Command, out var serviceType))
-                        {
-                            var reason = $"Could not find service for '{request.Command}' command.";
-                            _logger.LogWarning($"Processing '{request.Command}' command for client '{request.ClientId}' failed. {reason}");
-                            await client.Transceiver.Transmit(reason);
-                            continue;
-                        }
-
-                        var service = _serviceProvider.GetService(serviceType) as IService;
-                        var serviceResponse = await service.ProcessRequest(request.Data);
-
-                        await client.Transceiver.Transmit(serviceResponse);
+                        var response = await ProcessRequest(request);
+                        await client.Transceiver.Transmit(response);
                     }
                     catch (Exception e)
                     {
@@ -135,6 +135,20 @@ namespace PSK.Server
                     }
                 }
             }
+        }
+
+        public async Task<string> ProcessRequest(Request request)
+        {
+            if (!serviceTypes.TryGetValue(request.Command, out var serviceType))
+            {
+                var reason = $"Could not find service for '{request.Command}' command.";
+                _logger.LogWarning($"Processing '{request.Command}' command for client '{request.ClientId}' failed. {reason}");
+                return reason;
+            }
+
+            var service = _serviceProvider.GetService(serviceType) as IService;
+
+            return await service.ProcessRequest(request.Data);
         }
 
         public void Dispose()
