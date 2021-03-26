@@ -1,16 +1,12 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PSK.Core;
-using PSK.Core.Models;
 using PSK.Protocols.Tcp;
 using PSK.Services;
 using PSK.Services.Models;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,8 +15,7 @@ namespace PSK.Server
 {
     public class Server : IServer
     {
-        private IReadOnlyList<IReceiver> receivers;
-        private ConcurrentDictionary<Guid, ITransmitter> transmitters;
+        private IReadOnlyList<IListener> listeners;
         private IReadOnlyDictionary<string, Type> serviceTypes;
 
         private CancellationToken cancellationToken;
@@ -30,13 +25,16 @@ namespace PSK.Server
         private readonly ILogger _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly IRequestChannel _requestChannel;
+        private readonly IClientService _clientService;
 
-        public Server(IOptions<ServerOptions> options, ILogger<Server> logger, IRequestChannel requestChannel, IServiceProvider serviceProvider)
+        public Server(IOptions<ServerOptions> options, ILogger<Server> logger, IRequestChannel requestChannel, 
+            IServiceProvider serviceProvider, IClientService clientService)
         {
             _options = options;
             _logger = logger;
             _serviceProvider = serviceProvider;
             _requestChannel = requestChannel;
+            _clientService = clientService;
         }
 
         public void Start()
@@ -58,29 +56,20 @@ namespace PSK.Server
                 )
                 .ToDictionary(s => s.GetCustomAttribute<Command>()?.Value);
 
-            //Receiver configuration
-            receivers = Assembly.GetAssembly(typeof(TcpReceiver))
+            //Listener configuration
+            listeners = Assembly.GetAssembly(typeof(TcpListener))
                 .GetTypes()
                 .Where(
-                    t => t.IsAssignableTo(typeof(IReceiver)) &&
-                    t != typeof(IReceiver) &&
+                    t => t.IsAssignableTo(typeof(IListener)) &&
+                    t != typeof(IListener) &&
                     t.IsInterface
                 )
-                .Select(t => _serviceProvider.GetService(t) as IReceiver)
+                .Select(t => _serviceProvider.GetService(t) as IListener)
                 .ToList();
 
-            foreach (var receiver in receivers)
+            foreach (var listener in listeners)
             {
-                receiver.OnConnected += OnConnected;
-                receiver.OnDisconnected += OnDisconnected;
-            }
-
-            //Trasmitter configuration
-            transmitters = new ConcurrentDictionary<Guid, ITransmitter>();
-
-            foreach (var receiver in receivers)
-            {
-                receiver.Start();
+                listener.Start();
             }
 
             for (int i = 0; i < _options.Value.RequestWorkers; i++)
@@ -89,7 +78,7 @@ namespace PSK.Server
             }
 
             _logger.LogInformation($"Available services: {string.Join(", ", serviceTypes.Keys)}");
-            _logger.LogInformation($"Available protocols: {string.Join(", ", receivers.Select(r => r.GetType().Name.Replace("Receiver", "")))}");
+            _logger.LogInformation($"Available protocols: {string.Join(", ", listeners.Select(r => r.GetType().Name.Replace("Listener", "")))}");
             _logger.LogInformation($"Number of request workers: {_options.Value.RequestWorkers}");
             _logger.LogInformation("Server started");
         }
@@ -98,11 +87,10 @@ namespace PSK.Server
         {
             _logger.LogInformation("Stopping server");
 
-            foreach (var receiver in receivers)
+            //TODO: Clear clients
+            foreach (var listener in listeners)
             {
-                receiver.OnConnected -= OnConnected;
-                receiver.OnDisconnected -= OnDisconnected;
-                receiver.Stop();
+                listener.Stop();
             }
             await _requestChannel.ClearAsync(cancellationToken);
             cancellationTokenSource.Cancel();
@@ -117,8 +105,9 @@ namespace PSK.Server
                 while (await _requestChannel.WaitToReadAsync(cancellationToken))
                 {
                     var request = await _requestChannel.ReadAsync(cancellationToken);
+                    var client = _clientService.GetClientById(request.ClientId);
 
-                    if (!transmitters.TryGetValue(request.ClientId, out var transmitter))
+                    if (client == null)
                     {
                         _logger.LogWarning($"Could not find active transmitter for client '{request.ClientId}'");
                         continue;
@@ -131,7 +120,7 @@ namespace PSK.Server
                         if (arguments.Length != 2)
                         {
                             _logger.LogWarning($"Bad request from client '{request.ClientId}'. Invalid amount of arguments.");
-                            await transmitter.Transmit("Bad request. Invalid amount of arguments!");
+                            await client.Transceiver.Transmit("Bad request. Invalid amount of arguments!");
                             continue;
                         }
                         var command = arguments.FirstOrDefault();
@@ -142,14 +131,14 @@ namespace PSK.Server
                         {
                             var reason = $"Could not find service for '{command}' command.";
                             _logger.LogWarning($"Processing '{command}' command for client '{request.ClientId}' failed. {reason}");
-                            await transmitter.Transmit(reason);
+                            await client.Transceiver.Transmit(reason);
                             continue;
                         }
 
                         var service = _serviceProvider.GetService(serviceType) as IService;
                         var serviceResponse = await service.ProcessRequest(data);
 
-                        await transmitter.Transmit(serviceResponse);
+                        await client.Transceiver.Transmit(serviceResponse);
                     }
                     catch (Exception e)
                     {
@@ -157,39 +146,6 @@ namespace PSK.Server
                     }
                 }
             }
-        }
-
-
-
-        private void OnConnected(object sender, OnConnectedEventArgs e)
-        {
-            //TODO: Remove and create Transreceiver in Listener
-            string protocol = null;
-            switch (e.Client)
-            {
-                case TcpClient client:
-                    protocol = "TCP";
-                    var trasnmitter = _serviceProvider.GetService(typeof(ITcpTransmitter)) as ITcpTransmitter;
-                    trasnmitter.Start(client);
-                    transmitters.TryAdd(e.ClientId, trasnmitter);
-                    break;
-                default:
-                    protocol = "unknown";
-                    break;
-            }
-            _logger.LogInformation($"New client '{e.ClientId}' connected using '{protocol}' protocol");
-            _logger.LogInformation($"Number of clients connected: {transmitters.Count}");
-        }
-
-        private void OnDisconnected(object sender, OnDisconnectedEventArgs e)
-        {
-            _logger.LogInformation($"Client '{e.ClientId}' disconnected");
-            if (!transmitters.TryRemove(e.ClientId, out var transmitter))
-            {
-                _logger.LogWarning($"Could not find and remove transmitter for client '{e.ClientId}'");
-                return;
-            }
-            transmitter.Dispose();
         }
 
         public void Dispose()

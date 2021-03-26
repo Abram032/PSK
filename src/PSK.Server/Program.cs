@@ -35,15 +35,17 @@ namespace PSK.Server
                     });
                 })
                 //Options configuration
-                .Configure<TcpReceiverOptions>(configuration.GetSection($"Protocols:TCP:{nameof(TcpReceiverOptions)}"))
+                .Configure<TcpListener>(configuration.GetSection($"Protocols:TCP:{nameof(TcpListenerOptions)}"))
                 .Configure<RequestChannelOptions>(configuration.GetSection(nameof(RequestChannelOptions)))
                 .Configure<ServerOptions>(configuration.GetSection(nameof(ServerOptions)))
+                //Client Service
+                .AddSingleton<IClientService, ClientService>()
                 //Channel
                 .AddSingleton<IRequestChannel, RequestChannel>()
-                //Receivers
-                .AddSingleton<ITcpReceiver, TcpReceiver>()
-                //Transmitters
-                .AddTransient<ITcpTransmitter, TcpTransmitter>()
+                //Listeners
+                .AddSingleton<ITcpListener, TcpListener>()
+                //Transceivers
+                .AddTransient<ITcpTransceiver, TcpTransceiver>()
                 //Services
                 .AddSingleton<IPingService, PingService>()
                 //Server

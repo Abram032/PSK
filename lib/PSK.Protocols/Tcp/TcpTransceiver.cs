@@ -1,11 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using PSK.Core;
 using PSK.Core.Models;
 using System;
 using System.Buffers;
 using System.IO.Pipelines;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -13,64 +12,54 @@ using System.Threading.Tasks;
 
 namespace PSK.Protocols.Tcp
 {
-    public interface ITcpReceiver : IReceiver { }
-    public class TcpReceiver : ITcpReceiver
+    public interface ITcpTransceiver : ITransceiver { }
+    public class TcpTransceiver : ITcpTransceiver
     {
-        private TcpListener listener;
+        private TcpClient client;
         private CancellationToken cancellationToken;
         private CancellationTokenSource cancellationTokenSource;
 
-        private readonly IOptions<TcpReceiverOptions> _options;
         private readonly ILogger _logger;
         private readonly IRequestChannel _requestChannel;
+        private readonly IClientService _clientService;
 
-        public TcpReceiver(IOptions<TcpReceiverOptions> options, ILogger<TcpReceiver> logger, IRequestChannel requestChannel)
+        public Guid Id { get; set; }
+
+        public TcpTransceiver(ILogger<TcpTransceiver> logger, IRequestChannel requestChannel, IClientService clientService)
         {
-            _options = options;
             _logger = logger;
             _requestChannel = requestChannel;
+            _clientService = clientService;
+
+            Id = Guid.NewGuid();
         }
 
-        public event EventHandler<OnConnectedEventArgs> OnConnected;
-        public event EventHandler<OnDisconnectedEventArgs> OnDisconnected;
-
-        public void Dispose()
+        public void Start(object client)
         {
-            Stop();
-            cancellationTokenSource.Dispose();
+            cancellationTokenSource = new CancellationTokenSource();
+            cancellationToken = cancellationTokenSource.Token;
+
+            this.client = client as TcpClient;
+
+            Task.Factory.StartNew(() => Receive(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        //TOOD: Allow only listening in class, rename to ITcpListener or something around that
-        private void Listen()
+        public async Task Transmit(string data)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    var clientId = Guid.NewGuid();
-                    var client = listener.AcceptTcpClient();
-                    client.ReceiveTimeout = _options.Value.ReceiveTimeout;
-                    client.SendTimeout = _options.Value.SendTimeout;
-
-                    OnConnected?.Invoke(this, new OnConnectedEventArgs
-                    {
-                        ClientId = clientId,
-                        Client = client
-                    });
-
-                    Task.Factory.StartNew(() => Receive(clientId, client), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-                } 
-                catch(Exception e)
-                {
-                    _logger.LogError(e.Message);
-                    listener.Stop();
-                    listener = null;
-                }
+                ReadOnlyMemory<byte> response = Encoding.ASCII.GetBytes($"{data}");
+                await client.GetStream().WriteAsync(response);
+            }
+            catch(Exception e)
+            {
+                _logger.LogError(e.Message);
+                Stop();
+                Dispose();
             }
         }
 
-        //TODO: Move to Transrecveiver
-        private async Task Receive(Guid clientId, TcpClient client)
+        private async Task Receive()
         {
             var reader = PipeReader.Create(client.GetStream());
             try
@@ -78,39 +67,36 @@ namespace PSK.Protocols.Tcp
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     ReadResult result = await reader.ReadAsync(cancellationToken);
-                    if(result.IsCompleted)
+                    if (result.IsCompleted)
                     {
-                        //Client disconnected
                         break;
                     }
                     ReadOnlySequence<byte> buffer = result.Buffer;
 
                     while (TryReadLine(ref buffer, out ReadOnlySequence<byte> line))
                     {
-                        await ProcessLine(clientId, line);
+                        await ProcessLine(Id, line);
                     }
 
                     reader.AdvanceTo(buffer.Start, buffer.End);
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 _logger.LogError(e.Message);
             }
             finally
             {
                 await reader.CompleteAsync();
-                OnDisconnected?.Invoke(this, new OnDisconnectedEventArgs
-                {
-                    ClientId = clientId
-                });
+                Stop();
+                Dispose();
             }
         }
 
         private bool TryReadLine(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> line)
         {
             SequencePosition? position = buffer.PositionOf((byte)'\n');
-            if(!position.HasValue)
+            if (!position.HasValue)
             {
                 line = default;
                 return false;
@@ -124,10 +110,9 @@ namespace PSK.Protocols.Tcp
         private async ValueTask ProcessLine(Guid clientId, ReadOnlySequence<byte> line)
         {
             SequencePosition? position = line.PositionOf((byte)' ');
-            if(!position.HasValue)
+            if (!position.HasValue)
             {
-                //Discard read line, incomplete request
-                //TODO: Send response
+                await Transmit("Bad request.");
                 return;
             }
 
@@ -136,7 +121,7 @@ namespace PSK.Protocols.Tcp
 
             //Build command
             var stringBuilder = new StringBuilder();
-            foreach(var segment in command)
+            foreach (var segment in command)
             {
                 stringBuilder.Append(Encoding.ASCII.GetString(segment.Span).ToLower());
             }
@@ -161,20 +146,18 @@ namespace PSK.Protocols.Tcp
             }
         }
 
-        public void Start()
-        {
-            cancellationTokenSource = new CancellationTokenSource();
-            cancellationToken = cancellationTokenSource.Token;
-
-            listener = new TcpListener(IPAddress.Any, _options.Value.ListenPort);
-            listener.Start();
-            Task.Factory.StartNew(() => Listen(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-
         public void Stop()
         {
-            listener.Stop();
+            _logger.LogInformation($"Client '{Id}' disconnected");
             cancellationTokenSource.Cancel();
+            client.GetStream().Close();
+            client.Close();
+            _clientService.RemoveClient(Id);
+        }
+
+        public void Dispose()
+        {
+            client.Dispose();
         }
     }
 }

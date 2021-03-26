@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace PSK.Core
+namespace PSK.Server.Core
 {
     public class RequestChannelOptions
     {

@@ -1,12 +1,13 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using PSK.Core;
 using PSK.Core.Models;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace PSK.Core
+namespace PSK.Server
 {
     public class RequestChannel : IRequestChannel
     {
@@ -49,9 +50,6 @@ namespace PSK.Core
             if(requestChannel.Reader.CanCount && requestChannel.Reader.Count > 0)
             {
                 _logger.LogWarning($"Discarding {requestChannel.Reader.Count} requests from the channel");
-                await foreach (var request in requestChannel.Reader.ReadAllAsync(token))
-                {
-                }
             }
             CreateChannel();
         }

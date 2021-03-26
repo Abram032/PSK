@@ -4,7 +4,7 @@ using System.Text;
 
 namespace PSK.Protocols.Tcp
 {
-    public class TcpReceiverOptions
+    public class TcpListenerOptions
     {
         public int ListenPort { get; set; }
         public int ReceiveTimeout { get; set; }
