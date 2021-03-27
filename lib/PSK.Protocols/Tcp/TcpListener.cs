@@ -2,12 +2,9 @@
 using Microsoft.Extensions.Options;
 using PSK.Core;
 using PSK.Core.Models;
+using PSK.Core.Options;
 using System;
-using System.Buffers;
-using System.IO.Pipelines;
 using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,6 +22,7 @@ namespace PSK.Protocols.Tcp
         private readonly IClientService _clientService;
         private readonly IServiceProvider _serviceProvider;
 
+        //TODO: Use IOptionsMonitor<T> and update the listener if configuration changes
         public TcpListener(IOptions<TcpListenerOptions> options, ILogger<TcpListener> logger, IClientService clientService, IServiceProvider serviceProvider)
         {
             _options = options;

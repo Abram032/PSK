@@ -1,9 +1,13 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PSK.Core;
+using PSK.Core.Options;
 using PSK.Protocols.Tcp;
 using PSK.Services;
+using PSK.Services.Configure;
+using PSK.Services.Ping;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,7 +19,7 @@ namespace PSK.Server
         {
             //Configuration builder
             var configuration = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .AddEnvironmentVariables()
                 .AddCommandLine(args)
                 .Build();
@@ -38,6 +42,7 @@ namespace PSK.Server
                 .Configure<TcpListenerOptions>(configuration.GetSection(nameof(TcpListenerOptions)))
                 .Configure<RequestChannelOptions>(configuration.GetSection(nameof(RequestChannelOptions)))
                 .Configure<ServerOptions>(configuration.GetSection(nameof(ServerOptions)))
+                .Configure<PingServiceOptions>(configuration.GetSection(nameof(PingServiceOptions)))
                 //Client Service
                 .AddSingleton<IClientService, ClientService>()
                 //Channel
@@ -47,12 +52,16 @@ namespace PSK.Server
                 //Transceivers
                 .AddTransient<ITcpTransceiver, TcpTransceiver>()
                 //Services
-                .AddSingleton<IPingService, PingService>()
+                .AddSingleton<IConfigureServices, ConfigureServices>()
+                .AddTransient<IPingService>(provider =>
+                {
+                    var options = provider.GetRequiredService<IOptionsSnapshot<PingServiceOptions>>();
+                    return options.Value.IsActive ? new PingService(options) : null;
+                })
                 //Server
                 .AddSingleton<IServer, Server>()
                 .BuildServiceProvider();
 
-            //TODO: Allow to remove/add dynamically available services depending on ConfigurationService
 
             var cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;

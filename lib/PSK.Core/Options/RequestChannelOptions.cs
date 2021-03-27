@@ -1,4 +1,4 @@
-﻿namespace PSK.Server
+﻿namespace PSK.Core.Options
 {
     public class RequestChannelOptions
     {

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace PSK.Protocols.Tcp
+namespace PSK.Core.Options
 {
     public class TcpListenerOptions
     {

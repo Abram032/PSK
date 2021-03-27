@@ -1,5 +1,9 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using PSK.Core.Models.Services;
+using PSK.Core.Options;
+using System;
 using System.Diagnostics;
+using System.IO.Pipelines;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,46 +12,41 @@ namespace PSK.Client
 {
     class Program
     {
+        public static Stopwatch stopwatch = new Stopwatch();
         public static async Task Main(string[] args)
         {
             string server = "localhost";
             var client = new TcpClient(server, 21021);
-            var stream = client.GetStream();
 
-            string message = "ping Test\n";
-            byte[] data = Encoding.ASCII.GetBytes(message);
+            var transceiver = new TcpTransceiver();
+            transceiver.Start(client);
 
-            var stopwatch = new Stopwatch();
-            stopwatch.Start();
-            var sentAt = DateTime.Now;
-            int i = 0;
-            stream.Write(data, 0, data.Length);
-            while(i++ < 1005000000)
-            {
-                stream.Write(data, 0, data.Length);
-                //Console.WriteLine($"Sent: {message}");
-            }
+            //await transceiver.Transmit(GetConfigMessage());
+            await transceiver.Transmit(GetPingMessage());
 
-            await Task.Delay(15000);
-
-            byte[] response = new byte[256];
-            string responseStr = string.Empty;
-            int bytes;
-            do
-            {
-                bytes = stream.Read(response, 0, response.Length);
-                responseStr += Encoding.ASCII.GetString(response, 0, bytes);
-            }
-            while (stream.DataAvailable);
-            stopwatch.Stop();
-
-            Console.WriteLine($"Received: {responseStr}");
-            Console.WriteLine($"Time: {stopwatch.ElapsedMilliseconds} ms");
             await Task.Delay(-1);
-            client.GetStream().Close();
-            client.Close();
-            //client.Client.DisconnectAsync(new SocketAsyncEventArgs());
-            //client.Dispose();
+        }
+
+        public static string GetPingMessage()
+        {
+            return "ping 4194304 TESTTESTTESTTEST\n";
+        }
+
+        public static string GetConfigMessage()
+        {
+            var options = new PingServiceOptions
+            {
+                IsActive = true
+            };
+
+            var request = new ConfigureRequest
+            {
+                Command = ConfigureCommand.GetConfig,
+                Type = options.GetType(),
+                Options = JsonConvert.SerializeObject(options)
+            };
+
+            return $"configure {Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(request)))}\n";
         }
     }
 }

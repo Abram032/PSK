@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Options;
 using PSK.Core;
 using PSK.Core.Models;
+using PSK.Core.Options;
 using PSK.Protocols.Tcp;
 using PSK.Services;
 using PSK.Services.Models;
@@ -18,17 +19,18 @@ namespace PSK.Server
     {
         private IReadOnlyList<IListener> listeners;
         private IReadOnlyDictionary<string, Type> serviceTypes;
+        //private IDisposable monitor;
 
         private CancellationToken cancellationToken;
         private CancellationTokenSource cancellationTokenSource;
 
-        private readonly IOptions<ServerOptions> _options;
+        private readonly IOptionsMonitor<ServerOptions> _options;
         private readonly ILogger _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly IRequestChannel _requestChannel;
         private readonly IClientService _clientService;
 
-        public Server(IOptions<ServerOptions> options, ILogger<Server> logger, IRequestChannel requestChannel, 
+        public Server(IOptionsMonitor<ServerOptions> options, ILogger<Server> logger, IRequestChannel requestChannel, 
             IServiceProvider serviceProvider, IClientService clientService)
         {
             _options = options;
@@ -37,6 +39,14 @@ namespace PSK.Server
             _requestChannel = requestChannel;
             _clientService = clientService;
         }
+
+        //FIX: OnChange fires twice due to a bug in File Watcher
+        //private void OnOptionsChanged(ServerOptions options)
+        //{
+        //    _logger.LogWarning("Configuration change detected! Restarting server!");
+        //    Stop().Wait();
+        //    Start();
+        //}
 
         public void Start()
         {
@@ -73,14 +83,17 @@ namespace PSK.Server
                 listener.Start();
             }
 
-            for (int i = 0; i < _options.Value.RequestWorkers; i++)
+            for (int i = 0; i < _options.CurrentValue.RequestWorkers; i++)
             {
                 Task.Factory.StartNew(() => RequestWorker(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
 
+            //Options monitor
+            //monitor = _options.OnChange(OnOptionsChanged);
+
             _logger.LogInformation($"Available services: {string.Join(", ", serviceTypes.Keys)}");
             _logger.LogInformation($"Available protocols: {string.Join(", ", listeners.Select(r => r.GetType().Name.Replace("Listener", "")))}");
-            _logger.LogInformation($"Number of request workers: {_options.Value.RequestWorkers}");
+            _logger.LogInformation($"Number of request workers: {_options.CurrentValue.RequestWorkers}");
             _logger.LogInformation("Server started");
         }
 
@@ -88,9 +101,11 @@ namespace PSK.Server
         {
             _logger.LogInformation("Stopping server");
 
+            //monitor.Dispose();
             foreach (var listener in listeners)
             {
                 listener.Stop();
+                listener.Dispose();
             }
             _clientService.ClearClients();
             await _requestChannel.ClearAsync(cancellationToken);
@@ -129,16 +144,19 @@ namespace PSK.Server
 
         public async Task<string> ProcessRequest(Request request)
         {
-            if (!serviceTypes.TryGetValue(request.Command, out var serviceType))
+            if (serviceTypes.TryGetValue(request.Command, out var serviceType))
             {
-                var reason = $"Could not find service for '{request.Command}' command.";
-                _logger.LogWarning($"Processing '{request.Command}' command for client '{request.ClientId}' failed. {reason}");
-                return reason;
+                var service = _serviceProvider.GetService(serviceType) as IService;
+                
+                if(service != null)
+                {
+                    return await service.ProcessRequest(request.Data);
+                }                
             }
 
-            var service = _serviceProvider.GetService(serviceType) as IService;
-
-            return await service.ProcessRequest(request.Data);
+            var reason = $"Could not find service for '{request.Command}' command.";
+            _logger.LogWarning($"Processing '{request.Command}' command for client '{request.ClientId}' failed. {reason}");
+            return reason;
         }
 
         public void Dispose()
