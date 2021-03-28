@@ -6,8 +6,8 @@ namespace PSK.Core.Models.Services
 {
     public enum ConfigureCommand
     {
-        GetConfig,
-        UpdateConfig
+        Get,
+        Update
     }
 
     public class ConfigureRequest

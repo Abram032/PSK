@@ -5,6 +5,7 @@ using PSK.Core.Models;
 using System;
 using System.Buffers;
 using System.IO.Pipelines;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -24,6 +25,7 @@ namespace PSK.Protocols.Tcp
         private readonly IClientService _clientService;
 
         public Guid Id { get; }
+        public bool Active { get; private set; }
 
         public TcpTransceiver(ILogger<TcpTransceiver> logger, IRequestChannel requestChannel, IClientService clientService)
         {
@@ -34,7 +36,7 @@ namespace PSK.Protocols.Tcp
             Id = Guid.NewGuid();
         }
 
-        public void Start(object client)
+        public void Start(object client = null)
         {
             cancellationTokenSource = new CancellationTokenSource();
             cancellationToken = cancellationTokenSource.Token;
@@ -42,13 +44,17 @@ namespace PSK.Protocols.Tcp
             this.client = client as TcpClient;
 
             Task.Factory.StartNew(() => Receive(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+            Active = true;
         }
 
         public async Task Transmit(string data)
         {
             try
             {
-                ReadOnlyMemory<byte> response = Encoding.ASCII.GetBytes($"{data}");
+                ReadOnlyMemory<byte> response = 
+                    data.LastOrDefault().Equals('\n') ? 
+                    Encoding.ASCII.GetBytes($"{data}") : Encoding.ASCII.GetBytes($"{data}\n");
                 await client.GetStream().WriteAsync(response);
             }
             catch(Exception e)
@@ -115,7 +121,6 @@ namespace PSK.Protocols.Tcp
                 await Transmit("Bad request. Invalid amount of arguments.");
                 return;
             }
-
             var command = line.Slice(0, position.Value);
             var data = line.Slice(line.GetPosition(1, position.Value));
 
@@ -149,6 +154,9 @@ namespace PSK.Protocols.Tcp
         public void Stop()
         {
             _logger.LogInformation($"Client '{Id}' disconnected");
+            
+            Active = false;
+
             _clientService.RemoveClient(Id);
             if(client.Connected)
             {

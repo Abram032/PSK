@@ -137,6 +137,10 @@ namespace PSK.Server
                     catch (Exception e)
                     {
                         _logger.LogError(e.Message);
+                        if(client != null)
+                        {
+                            await client.Transceiver.Transmit(e.Message);
+                        }
                     }
                 }
             }

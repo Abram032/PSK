@@ -1,6 +1,8 @@
-﻿using PSK.Protocols.Tcp;
+﻿using PSK.Client.Enums;
+using PSK.Protocols.Tcp;
 using System;
 using System.Buffers;
+using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Pipelines;
@@ -21,24 +23,32 @@ namespace PSK.Client
         private CancellationTokenSource cancellationTokenSource;
 
         public Guid Id { get; }
+        public bool Active { get; private set; }
 
         public TcpTransceiver()
         {
             Id = Guid.NewGuid();
             stopwatch = new Stopwatch();
         }
-        public void Start(object client)
+        public void Start(object client = null)
         {
             cancellationTokenSource = new CancellationTokenSource();
             cancellationToken = cancellationTokenSource.Token;
 
-            this.client = client as TcpClient;
+            if(client == null)
+            {
+                this.client = new TcpClient("localhost", 21021);
+            }
 
             Task.Factory.StartNew(() => Receive(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+            Active = true;
         }
 
         public void Stop()
         {
+            Active = false;
+
             if (client.Connected)
             {
                 client.GetStream().Close();
@@ -126,9 +136,20 @@ namespace PSK.Client
             }
 
             stopwatch.Stop();
-            Console.WriteLine(stringBuilder.ToString());
-            Console.WriteLine($"Time: {stopwatch.ElapsedMilliseconds}ms");
+            Console.Write($"\n[{Protocol.Tcp}] Server ({stopwatch.ElapsedMilliseconds}ms) |> {TryParseFromBase64(stringBuilder.ToString())}");
             stopwatch.Reset();
+        }
+
+        private string TryParseFromBase64(string data)
+        {
+            var buffer = new Span<byte>(new byte[data.Length]);
+            //data.PadRight(data.Length / 4 * 4 + (data.Length % 4 == 0 ? 0 : 4), '=')
+            if (!Convert.TryFromBase64String(data, buffer, out _))
+            {
+                return data;
+            }
+
+            return $"\n{Encoding.UTF8.GetString(buffer)}\n";
         }
     }
 }

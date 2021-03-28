@@ -55,8 +55,8 @@ namespace PSK.Server
                 .AddSingleton<IConfigureServices, ConfigureServices>()
                 .AddTransient<IPingService>(provider =>
                 {
-                    var options = provider.GetRequiredService<IOptionsSnapshot<PingServiceOptions>>();
-                    return options.Value.IsActive ? new PingService(options) : null;
+                    var options = provider.GetRequiredService<IOptionsMonitor<PingServiceOptions>>();
+                    return options.CurrentValue.IsActive ? new PingService(options) : null;
                 })
                 //Server
                 .AddSingleton<IServer, Server>()

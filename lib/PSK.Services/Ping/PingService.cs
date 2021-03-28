@@ -14,9 +14,9 @@ namespace PSK.Services.Ping
 
         private readonly PingServiceOptions _options;
 
-        public PingService(IOptionsSnapshot<PingServiceOptions> options)
+        public PingService(IOptionsMonitor<PingServiceOptions> options)
         {
-            _options = options.Value;
+            _options = options.CurrentValue;
         }
 
         public async Task<string> ProcessRequest(string request)
