@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace PSK.Server
@@ -27,10 +28,10 @@ namespace PSK.Server
         private readonly IOptionsMonitor<ServerOptions> _options;
         private readonly ILogger _logger;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IRequestChannel _requestChannel;
+        private readonly Channel<Message> _requestChannel;
         private readonly IClientService _clientService;
 
-        public Server(IOptionsMonitor<ServerOptions> options, ILogger<Server> logger, IRequestChannel requestChannel, 
+        public Server(IOptionsMonitor<ServerOptions> options, ILogger<Server> logger, Channel<Message> requestChannel, 
             IServiceProvider serviceProvider, IClientService clientService)
         {
             _options = options;
@@ -108,7 +109,7 @@ namespace PSK.Server
                 listener.Dispose();
             }
             _clientService.ClearClients();
-            await _requestChannel.ClearAsync(cancellationToken);
+            _requestChannel.Reader.ReadAllAsync(cancellationToken);
             cancellationTokenSource.Cancel();
 
             _logger.LogInformation("Server stopped");
@@ -118,9 +119,9 @@ namespace PSK.Server
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                while (await _requestChannel.WaitToReadAsync(cancellationToken))
+                while (await _requestChannel.Reader.WaitToReadAsync(cancellationToken))
                 {
-                    var request = await _requestChannel.ReadAsync(cancellationToken);
+                    var request = await _requestChannel.Reader.ReadAsync(cancellationToken);
                     var client = _clientService.GetClientById(request.ClientId);
 
                     if (client == null)
@@ -146,7 +147,7 @@ namespace PSK.Server
             }
         }
 
-        public async Task<string> ProcessRequest(Request request)
+        public async Task<string> ProcessRequest(Message request)
         {
             if (serviceTypes.TryGetValue(request.Command, out var serviceType))
             {
@@ -154,7 +155,7 @@ namespace PSK.Server
                 
                 if(service != null)
                 {
-                    return await service.ProcessRequest(request.Data);
+                    return await service.ProcessRequest(request.ClientId, request.Data);
                 }                
             }
 

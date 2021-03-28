@@ -1,5 +1,6 @@
 ﻿using PSK.Core.Models;
 using System;
+using System.Collections.Generic;
 
 namespace PSK.Core
 {
@@ -15,5 +16,6 @@ namespace PSK.Core
         bool AddClient(Client client);
         bool RemoveClient(Guid id);
         void ClearClients();
+        IEnumerable<string> GetClients();
     }
 }

@@ -3,12 +3,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PSK.Core;
+using PSK.Core.Models;
 using PSK.Core.Options;
 using PSK.Protocols.Tcp;
 using PSK.Services;
+using PSK.Services.Chat;
 using PSK.Services.Configure;
 using PSK.Services.Ping;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace PSK.Server
@@ -40,13 +43,18 @@ namespace PSK.Server
                 })
                 //Options configuration
                 .Configure<TcpListenerOptions>(configuration.GetSection(nameof(TcpListenerOptions)))
-                .Configure<RequestChannelOptions>(configuration.GetSection(nameof(RequestChannelOptions)))
+                .Configure<MessageChannelOptions>(configuration.GetSection(nameof(MessageChannelOptions)))
                 .Configure<ServerOptions>(configuration.GetSection(nameof(ServerOptions)))
                 .Configure<PingServiceOptions>(configuration.GetSection(nameof(PingServiceOptions)))
+                .Configure<ChatServiceOptions>(configuration.GetSection(nameof(ChatServiceOptions)))
                 //Client Service
                 .AddSingleton<IClientService, ClientService>()
                 //Channel
-                .AddSingleton<IRequestChannel, RequestChannel>()
+                .AddSingleton<Channel<Message>>(provider => {
+                    var options = provider.GetRequiredService<IOptionsMonitor<MessageChannelOptions>>();
+                    return options.CurrentValue.Capacity == 0 ? 
+                        Channel.CreateUnbounded<Message>() : Channel.CreateBounded<Message>(options.CurrentValue.Capacity);
+                })
                 //Listeners
                 .AddSingleton<ITcpListener, TcpListener>()
                 //Transceivers
@@ -57,6 +65,12 @@ namespace PSK.Server
                 {
                     var options = provider.GetRequiredService<IOptionsMonitor<PingServiceOptions>>();
                     return options.CurrentValue.IsActive ? new PingService(options) : null;
+                })
+                .AddSingleton<IChatService>(provider =>
+                {
+                    var options = provider.GetRequiredService<IOptionsMonitor<ChatServiceOptions>>();
+                    var clientService = provider.GetRequiredService<IClientService>();
+                    return options.CurrentValue.IsActive ? new ChatService(clientService) : null;
                 })
                 //Server
                 .AddSingleton<IServer, Server>()

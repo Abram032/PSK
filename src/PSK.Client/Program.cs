@@ -1,9 +1,13 @@
 ﻿using PSK.Client.Enums;
 using PSK.Core;
+using PSK.Core.Models;
+using PSK.Protocols.Tcp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Text;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace PSK.Client
@@ -17,7 +21,7 @@ namespace PSK.Client
         {
             Transceivers = new Dictionary<Protocol, ITransceiver>
             {
-                { Protocol.Tcp, new TcpTransceiver() }
+                { Protocol.Tcp, new ClientTcpTransceiver() }
             };
 
             Console.WriteLine("Use '/help' for more information.");
@@ -26,13 +30,13 @@ namespace PSK.Client
                 Console.Write($"({CurrentProtocol} | {CurrentService}) > ");
 
                 var input = Console.ReadLine();
-                ParseCommand(input);
+                await ParseCommandAsync(input);
             }
 
             await Task.Delay(-1);
         }
 
-        private static void ParseCommand(string input)
+        private static async Task ParseCommandAsync(string input)
         {
             input = input.Trim();
 
@@ -53,8 +57,7 @@ namespace PSK.Client
                     Console.WriteLine("Activate transceiver before sending a request!");
                     return;
                 }
-
-                transceiver.Transmit($"{CurrentService.Value} {input}\n");
+                await SendMessage(transceiver, input);
                 return;
             }
             else if (!input.StartsWith('/'))
@@ -91,6 +94,17 @@ namespace PSK.Client
                     Console.WriteLine("Unknown command.");
                     break;
             }
+        }
+
+        private static async Task SendMessage(ITransceiver transceiver, string input)
+        {
+            switch(CurrentService.Value)
+            {
+                case Service.Chat:
+                    input = Convert.ToBase64String(Encoding.UTF8.GetBytes(input));
+                    break;
+            }
+            await transceiver.Transmit($"{CurrentService.Value} {input}");
         }
 
         private static void StopCommand()

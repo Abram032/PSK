@@ -26,24 +26,28 @@ namespace PSK.Services.Configure
         //tcp configure get PingServiceOptions -IsActive false -Cos true
         //TODO: Move to System.Text.Json
         //TODO: Implement factory for exceptions
-        public async Task<string> ProcessRequest(string request)
+        public async Task<string> ProcessRequest(Guid clientId, string request)
         {
-
             var command = request.Split(' ').FirstOrDefault();
             var serviceOptions = request.Split(' ').Skip(1).FirstOrDefault();
             var options = request.Split('-').AsEnumerable().Skip(1).Select(o => o.Trim().Split(' '));
 
             var commandEnum = Enum.Parse(typeof(ConfigureCommand), command, true);
 
+            string response = null;
             switch (commandEnum)
             {
                 case ConfigureCommand.Get:
-                    return await GetConfiguration(serviceOptions);
+                    response = await GetConfiguration(serviceOptions);
+                    break;
                 case ConfigureCommand.Update:
-                    return await UpdateConfiguration(serviceOptions, options);
+                    response = await UpdateConfiguration(serviceOptions, options);
+                    break;
                 default:
-                    throw new Exception("Unknown command for Configure service");
+                    response = "Unknown command for Configure service";
+                    break;
             }
+            return $"configure {response}";
         }
 
         private Type GetServiceType(string serviceOptions) => 
@@ -77,7 +81,7 @@ namespace PSK.Services.Configure
 
             if(type == null)
             {
-                return $"{Convert.ToBase64String(Encoding.UTF8.GetBytes(file))}\n";
+                return Convert.ToBase64String(Encoding.UTF8.GetBytes(file));
             }
 
 
@@ -87,7 +91,7 @@ namespace PSK.Services.Configure
                 return null;
             }
             var sectionObject = JsonConvert.DeserializeObject(section.ToString(), type);
-            return $"{Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(sectionObject, Formatting.Indented)))}\n";
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(sectionObject, Formatting.Indented)));
         }
 
         private async Task<string> UpdateConfiguration(string serviceOptions, IEnumerable<string[]> options)
@@ -106,10 +110,10 @@ namespace PSK.Services.Configure
 
             if (await UpdateConfiguration(type, options))
             {
-                return "Configuration updated!\n";
+                return "Configuration updated!";
             }
 
-            return "Failed to update configuration!\n";
+            return "Failed to update configuration!";
         }
 
         private async Task<bool> UpdateConfiguration(Type type, IEnumerable<string[]> options)

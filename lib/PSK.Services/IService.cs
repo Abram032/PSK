@@ -1,9 +1,10 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 
 namespace PSK.Services
 {
     public interface IService
     {
-        Task<string> ProcessRequest(string request);
+        Task<string> ProcessRequest(Guid clientId, string request);
     }
 }

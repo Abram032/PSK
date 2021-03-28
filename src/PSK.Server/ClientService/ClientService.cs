@@ -2,6 +2,7 @@
 using PSK.Core.Models;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace PSK.Server
 {
@@ -82,6 +83,11 @@ namespace PSK.Server
             }
             clients.Clear();
             clientsAliases.Clear();
+        }
+
+        public IEnumerable<string> GetClients()
+        {
+            return clientsAliases.Keys;
         }
     }
 }

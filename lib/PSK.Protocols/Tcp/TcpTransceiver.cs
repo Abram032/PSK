@@ -9,46 +9,41 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace PSK.Protocols.Tcp
 {
     public interface ITcpTransceiver : ITransceiver { }
-    public class TcpTransceiver : ITcpTransceiver
+    public class TcpTransceiver : BaseTransceiver, ITcpTransceiver
     {
-        private TcpClient client;
-        private CancellationToken cancellationToken;
-        private CancellationTokenSource cancellationTokenSource;
-
-        private readonly ILogger _logger;
-        private readonly IRequestChannel _requestChannel;
+        protected TcpClient client;
+        private readonly Channel<Message> _messageChannel;
         private readonly IClientService _clientService;
+        private readonly ILogger _logger;
 
-        public Guid Id { get; }
-        public bool Active { get; private set; }
-
-        public TcpTransceiver(ILogger<TcpTransceiver> logger, IRequestChannel requestChannel, IClientService clientService)
+        public TcpTransceiver(Channel<Message> messageChannel, ILogger<TcpTransceiver> logger = null, IClientService clientService = null)
+            : base()
         {
             _logger = logger;
-            _requestChannel = requestChannel;
             _clientService = clientService;
-
-            Id = Guid.NewGuid();
+            _messageChannel = messageChannel;
         }
 
-        public void Start(object client = null)
+        public override void Start(object client = null)
         {
             cancellationTokenSource = new CancellationTokenSource();
             cancellationToken = cancellationTokenSource.Token;
 
             this.client = client as TcpClient;
 
-            Task.Factory.StartNew(() => Receive(), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            var reader = PipeReader.Create(this.client.GetStream());
+            Task.Factory.StartNew(() => Receive(reader), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             Active = true;
         }
 
-        public async Task Transmit(string data)
+        public override async Task Transmit(string data)
         {
             try
             {
@@ -59,105 +54,17 @@ namespace PSK.Protocols.Tcp
             }
             catch(Exception e)
             {
-                _logger.LogError(e.Message);
+                LogException(e.Message);
                 Stop();
                 Dispose();
             }
         }
 
-        private async Task Receive()
+        public override void Stop()
         {
-            var reader = PipeReader.Create(client.GetStream());
-            try
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    ReadResult result = await reader.ReadAsync(cancellationToken);
-                    if (result.IsCompleted)
-                    {
-                        break;
-                    }
-                    ReadOnlySequence<byte> buffer = result.Buffer;
-
-                    while (TryReadLine(ref buffer, out ReadOnlySequence<byte> line))
-                    {
-                        await ProcessLine(Id, line);
-                    }
-
-                    reader.AdvanceTo(buffer.Start, buffer.End);
-                }
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e.Message);
-            }
-            finally
-            {
-                await reader.CompleteAsync();
-                Stop();
-                Dispose();
-            }
-        }
-
-        private bool TryReadLine(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> line)
-        {
-            SequencePosition? position = buffer.PositionOf((byte)'\n');
-            if (!position.HasValue)
-            {
-                line = default;
-                return false;
-            }
-
-            line = buffer.Slice(0, position.Value);
-            buffer = buffer.Slice(buffer.GetPosition(1, position.Value));
-            return true;
-        }
-
-        private async ValueTask ProcessLine(Guid clientId, ReadOnlySequence<byte> line)
-        {
-            SequencePosition? position = line.PositionOf((byte)' ');
-            if (!position.HasValue)
-            {
-                await Transmit("Bad request. Invalid amount of arguments.");
-                return;
-            }
-            var command = line.Slice(0, position.Value);
-            var data = line.Slice(line.GetPosition(1, position.Value));
-
-            //Build command
-            var stringBuilder = new StringBuilder();
-            foreach (var segment in command)
-            {
-                stringBuilder.Append(Encoding.ASCII.GetString(segment.Span).ToLower());
-            }
-            var parsedCommand = stringBuilder.ToString();
-            //Build data
-            stringBuilder.Clear();
-            foreach (var segment in data)
-            {
-                stringBuilder.Append(Encoding.ASCII.GetString(segment.Span));
-            }
-            var parsedData = stringBuilder.ToString();
-
-            while (await _requestChannel.WaitToWriteAsync(cancellationToken))
-            {
-                await _requestChannel.WriteAsync(new Request
-                {
-                    ClientId = clientId,
-                    Command = parsedCommand,
-                    Data = parsedData
-                });
-                return;
-            }
-        }
-
-        public void Stop()
-        {
-            _logger.LogInformation($"Client '{Id}' disconnected");
-            
             Active = false;
 
-            _clientService.RemoveClient(Id);
+            DisconnectClient();
             if(client.Connected)
             {
                 client.GetStream().Close();
@@ -166,10 +73,35 @@ namespace PSK.Protocols.Tcp
             cancellationTokenSource.Cancel();
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             client.Dispose();
             cancellationTokenSource.Dispose();
+        }
+
+        protected override void LogException(string message)
+        {
+            _logger.LogError(message);
+        }
+
+        protected override void DisconnectClient()
+        {
+            _logger.LogInformation($"Client '{Id}' disconnected.");
+            _clientService.RemoveClient(Id);
+        }
+
+        protected override async ValueTask ProcessMessage(Guid clientId, string command, string data)
+        {
+            while (await _messageChannel.Writer.WaitToWriteAsync(cancellationToken))
+            {
+                await _messageChannel.Writer.WriteAsync(new Message
+                {
+                    ClientId = clientId,
+                    Command = command,
+                    Data = data
+                });
+                return;
+            }
         }
     }
 }

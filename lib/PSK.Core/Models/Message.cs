@@ -2,7 +2,7 @@
 
 namespace PSK.Core.Models
 {
-    public class Request
+    public class Message
     {
         public Guid ClientId { get; set; }
         public string Command { get; set; }
