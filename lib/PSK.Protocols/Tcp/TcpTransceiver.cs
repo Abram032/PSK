@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using PSK.Core;
 using PSK.Core.Models;
 using System;
@@ -54,7 +55,7 @@ namespace PSK.Protocols.Tcp
             }
             catch(Exception e)
             {
-                LogException(e.Message);
+                await LogException(e.Message);
                 Stop();
                 Dispose();
             }
@@ -79,9 +80,14 @@ namespace PSK.Protocols.Tcp
             cancellationTokenSource.Dispose();
         }
 
-        protected override void LogException(string message)
+        protected override async Task LogException(string message)
         {
             _logger.LogError(message);
+            await Transmit(Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new Message
+            {
+                Succeded = false,
+                Error = message
+            }))));
         }
 
         protected override void DisconnectClient()
@@ -90,16 +96,11 @@ namespace PSK.Protocols.Tcp
             _clientService.RemoveClient(Id);
         }
 
-        protected override async ValueTask ProcessMessage(Guid clientId, string command, string data)
+        protected override async ValueTask ProcessMessage(Message message)
         {
             while (await _messageChannel.Writer.WaitToWriteAsync(cancellationToken))
             {
-                await _messageChannel.Writer.WriteAsync(new Message
-                {
-                    ClientId = clientId,
-                    Command = command,
-                    Data = data
-                });
+                await _messageChannel.Writer.WriteAsync(message);
                 return;
             }
         }

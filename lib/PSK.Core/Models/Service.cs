@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PSK.Client.Enums
+namespace PSK.Core.Models
 {
     public enum Service
     {

@@ -13,6 +13,8 @@ using System.Net.Http.Json;
 using System.Collections.Generic;
 using System.Reflection;
 using PSK.Core.Options;
+using PSK.Core.Models.Services.Configure;
+using PSK.Core.Models;
 
 namespace PSK.Services.Configure
 {
@@ -23,65 +25,80 @@ namespace PSK.Services.Configure
         {
             _configuration = configuration;
         }
-        //tcp configure get PingServiceOptions -IsActive false -Cos true
+
         //TODO: Move to System.Text.Json
         //TODO: Implement factory for exceptions
-        public async Task<string> ProcessRequest(Guid clientId, string request)
+        public async Task<string> ProcessRequest(string data)
         {
-            var command = request.Split(' ').FirstOrDefault();
-            var serviceOptions = request.Split(' ').Skip(1).FirstOrDefault();
-            var options = request.Split('-').AsEnumerable().Skip(1).Select(o => o.Trim().Split(' '));
+            var request = JsonConvert.DeserializeObject<ConfigureRequest>(data);
 
-            var commandEnum = Enum.Parse(typeof(ConfigureCommand), command, true);
-
-            string response = null;
-            switch (commandEnum)
+            Message response;
+            switch (request.Command)
             {
                 case ConfigureCommand.Get:
-                    response = await GetConfiguration(serviceOptions);
+                    response = await GetConfiguration(request.ServiceOptions);
                     break;
                 case ConfigureCommand.Update:
-                    response = await UpdateConfiguration(serviceOptions, options);
+                    response = await UpdateConfiguration(request.ServiceOptions, request.Options);
                     break;
                 default:
-                    response = "Unknown command for Configure service";
+                    response = new Message()
+                    {
+                        Service = Service.Chat,
+                        Succeded = false,
+                        Error = "Unknown command for Configure service"
+                    };
                     break;
             }
-            return $"configure {response}";
+
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response)));
         }
 
         private Type GetServiceType(string serviceOptions) => 
             Assembly.GetAssembly(typeof(ServerOptions)).GetTypes().Where(t => t.Name == serviceOptions).FirstOrDefault();
 
-        private async Task<string> GetConfiguration(string serviceOptions)
+        private async Task<Message> GetConfiguration(string serviceOptions)
         {
+            var response = new Message
+            {
+                Service = Service.Configure,
+                Succeded = false,
+            };
+
             var type = GetServiceType(serviceOptions);
 
-            if(type != null || serviceOptions == null)
+            if(type == null && serviceOptions != null)
             {
-                var config = await GetConfiguration(type);
-                if (config != null)
-                {
-                    return config;
-                }
+                response.Error = "Failed to retrieve configuration!";
+                return response;
             }
-            
-            return "Failed to retrieve configuration!";
+
+            var config = await GetConfiguration(type);
+
+            if (string.IsNullOrEmpty(config))
+            {
+                response.Error = "Failed to retrieve configuration!";
+                return response;
+            }
+
+            response.Data = config;
+            response.Succeded = true;
+            return response;
         }
 
         private async Task<string> GetConfiguration(Type type)
         {
             var path = "appsettings.json";
-            if (!File.Exists(path))
+            if (!System.IO.File.Exists(path))
             {
                 return null;
             }
 
-            var file = await File.ReadAllTextAsync(path);
+            var file = await System.IO.File.ReadAllTextAsync(path);
 
             if(type == null)
             {
-                return Convert.ToBase64String(Encoding.UTF8.GetBytes(file));
+                return file;
             }
 
 
@@ -91,40 +108,51 @@ namespace PSK.Services.Configure
                 return null;
             }
             var sectionObject = JsonConvert.DeserializeObject(section.ToString(), type);
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(sectionObject, Formatting.Indented)));
+            return JsonConvert.SerializeObject(sectionObject, Formatting.Indented);
         }
 
-        private async Task<string> UpdateConfiguration(string serviceOptions, IEnumerable<string[]> options)
+        private async Task<Message> UpdateConfiguration(string serviceOptions, Dictionary<string, string> options)
         {
-            if(options.Count() == 0 || options.Any(o => o.Length != 2))
+            var response = new Message
             {
-                throw new Exception("Invalid arguments count.");
+                Service = Service.Configure,
+                Succeded = false,
+            };
+
+            if (options.Count() == 0)
+            {
+                response.Error = "Invalid arguments count.";
+                return response;
             }
 
             var type = GetServiceType(serviceOptions);
 
             if(type == null)
             {
-                throw new Exception("Unknown service options.");
+                response.Error = "Unknown service options.";
+                return response;
             }
 
             if (await UpdateConfiguration(type, options))
             {
-                return "Configuration updated!";
+                response.Succeded = true;
+                response.Data = "Configuration updated!";
+                return response;
             }
 
-            return "Failed to update configuration!";
+            response.Error = "Failed to update configuration!";
+            return response;
         }
 
-        private async Task<bool> UpdateConfiguration(Type type, IEnumerable<string[]> options)
+        private async Task<bool> UpdateConfiguration(Type type, Dictionary<string, string> options)
         {
             var path = "appsettings.json";
-            if(!File.Exists(path))
+            if(!System.IO.File.Exists(path))
             {
                 return false;
             }
 
-            var file = await File.ReadAllTextAsync(path);
+            var file = await System.IO.File.ReadAllTextAsync(path);
             var jObject = JsonConvert.DeserializeObject<JObject>(file);
             if(!jObject.TryGetValue(type.Name, out JToken section))
             {
@@ -134,8 +162,8 @@ namespace PSK.Services.Configure
 
             foreach(var option in options)
             {
-                var name = option.FirstOrDefault();
-                var value = option.LastOrDefault();
+                var name = option.Key;
+                var value = option.Value;
 
                 var property = type.GetProperties().Where(p => p.Name == name && p.CanWrite).FirstOrDefault();
 
@@ -143,7 +171,7 @@ namespace PSK.Services.Configure
             }
 
             jObject[type.Name] = JObject.Parse(JsonConvert.SerializeObject(sectionObject));
-            File.WriteAllText(path, JsonConvert.SerializeObject(jObject, Formatting.Indented));
+            System.IO.File.WriteAllText(path, JsonConvert.SerializeObject(jObject, Formatting.Indented));
 
             return true;
         }

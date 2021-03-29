@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using PSK.Core;
 using PSK.Core.Models;
 using PSK.Core.Options;
@@ -10,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -149,19 +151,24 @@ namespace PSK.Server
 
         public async Task<string> ProcessRequest(Message request)
         {
-            if (serviceTypes.TryGetValue(request.Command, out var serviceType))
+            if (serviceTypes.TryGetValue(request.Service.ToString().ToLower(), out var serviceType))
             {
                 var service = _serviceProvider.GetService(serviceType) as IService;
                 
                 if(service != null)
                 {
-                    return await service.ProcessRequest(request.ClientId, request.Data);
-                }                
+                    return await service.ProcessRequest(request.Data);
+                }
             }
 
-            var reason = $"Could not find service for '{request.Command}' command.";
-            _logger.LogWarning($"Processing '{request.Command}' command for client '{request.ClientId}' failed. {reason}");
-            return reason;
+            var reason = $"Could not find service for '{request.Service}' command.";
+            _logger.LogWarning($"Processing '{request.Service}' command for client '{request.ClientId}' failed. {reason}");
+            var response = new Message()
+            {
+                Succeded = false,
+                Error = reason
+            };
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response)));
         }
 
         public void Dispose()

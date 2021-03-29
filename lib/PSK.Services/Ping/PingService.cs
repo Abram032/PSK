@@ -19,7 +19,7 @@ namespace PSK.Services.Ping
             _options = options.CurrentValue;
         }
 
-        public async Task<string> ProcessRequest(Guid clientId, string request)
+        public async Task<string> ProcessRequest(string request)
         {
             var bytes = request.Split(' ').FirstOrDefault();
 

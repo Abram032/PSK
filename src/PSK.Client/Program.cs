@@ -1,9 +1,14 @@
-﻿using PSK.Client.Enums;
+﻿using Newtonsoft.Json;
+using PSK.Client.Enums;
 using PSK.Core;
 using PSK.Core.Models;
+using PSK.Core.Models.Services.Chat;
+using PSK.Core.Models.Services.Configure;
+using PSK.Core.Models.Services.File;
 using PSK.Protocols.Tcp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
@@ -98,13 +103,27 @@ namespace PSK.Client
 
         private static async Task SendMessage(ITransceiver transceiver, string input)
         {
+            string data = null;
             switch(CurrentService.Value)
             {
                 case Service.Chat:
-                    input = Convert.ToBase64String(Encoding.UTF8.GetBytes(input));
+                    data = BuildChatRequest(input);
+                    break;
+                case Service.Ping:
+                    data = BuildPingRequest(input);
+                    break;
+                case Service.Configure:
+                    data = BuildConfigureRequest(input);
+                    break;
+                case Service.File:
+                    data = BuildFileRequest(input);
                     break;
             }
-            await transceiver.Transmit($"{CurrentService.Value} {input}");
+
+            if (!string.IsNullOrEmpty(data))
+            {
+                await transceiver.Transmit(data);
+            }
         }
 
         private static void StopCommand()
@@ -181,6 +200,124 @@ namespace PSK.Client
         private static void HelpCommand(IEnumerable<string> arguments)
         {
 
+        }
+
+        private static string BuildChatRequest(string input)
+        {
+            var command = (ChatCommand)Enum.Parse(typeof(ChatCommand), input.Split(' ').FirstOrDefault(), true);
+            var request = new ChatRequest();
+
+            switch(command)
+            {
+                case ChatCommand.Get:
+                    request.Command = command;
+                    request.Alias = input.Split(' ').Skip(1).FirstOrDefault();
+                    break;
+                case ChatCommand.Send:
+                    request.Command = command;
+                    request.Message = new ChatMessage
+                    {
+                        Timestamp = DateTime.Now,
+                        Sender = input.Split(' ').Skip(1).FirstOrDefault(),
+                        Receiver = input.Split(' ').Skip(2).FirstOrDefault(),
+                        Content = string.Join(' ', input.Split(' ').Skip(3))
+                    };
+                    break;
+                default:
+                    Console.WriteLine("Invalid request.");
+                    return null;
+            }
+
+            var message = new Message()
+            {
+                Service = Service.Chat,
+                Data = JsonConvert.SerializeObject(request)
+            };
+
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message)));
+        }
+
+        private static string BuildPingRequest(string input)
+        {
+            return $"ping {input}";
+        }
+
+        private static string BuildConfigureRequest(string input)
+        {
+            var command = (ConfigureCommand)Enum.Parse(typeof(ConfigureCommand), input.Split(' ').FirstOrDefault(), true);
+            var request = new ConfigureRequest
+            {
+                Command = command,
+                ServiceOptions = input.Split(' ').Skip(1).FirstOrDefault()
+            };
+
+            switch (command)
+            {
+                case ConfigureCommand.Get:
+                    break;
+                case ConfigureCommand.Update:
+                    var options = new Dictionary<string, string>();
+                    foreach (var pair in input.Split('-').AsEnumerable().Skip(1).Select(o => o.Trim().Split(' ')))
+                    {
+                        options.Add(pair.FirstOrDefault(), pair.LastOrDefault());
+                    }
+                    request.Options = options;
+                    break;
+                default:
+                    Console.WriteLine("Invalid request.");
+                    return null;
+            }
+
+            var message = new Message()
+            {
+                Service = Service.Configure,
+                Data = JsonConvert.SerializeObject(request)
+            };
+
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message)));
+        }
+
+        private static string BuildFileRequest(string input)
+        {
+            var command = (FileCommand)Enum.Parse(typeof(FileCommand), input.Split(' ').FirstOrDefault(), true);
+            var request = new FileRequest
+            {
+                Command = command
+            };
+
+            switch (command)
+            {
+                case FileCommand.List:
+                    break;
+                case FileCommand.Get:
+                    request.FileName = input.Split(' ').Skip(1).FirstOrDefault();
+                    break;
+                case FileCommand.Delete:
+                    request.FileName = input.Split(' ').Skip(1).FirstOrDefault();
+                    break;
+                case FileCommand.Put:
+                    request.FileName = input.Split(' ').Skip(1).FirstOrDefault();
+                    var filePath = input.Split(' ').Skip(2).FirstOrDefault();
+                    if(!File.Exists(filePath))
+                    {
+                        Console.WriteLine("File doesn't exist!");
+                    }
+                    var bytes = File.ReadAllBytes(filePath);
+                    var data = Convert.ToBase64String(bytes);
+                    request.Data = data;
+                    break;
+                default:
+                    Console.WriteLine("Invalid request.");
+                    return null;
+            }
+
+            var message = new Message()
+            {
+                Service = Service.File,
+                Data = JsonConvert.SerializeObject(request)
+            };
+
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message)));
         }
     }
 }

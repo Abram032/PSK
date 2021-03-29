@@ -9,6 +9,7 @@ using PSK.Protocols.Tcp;
 using PSK.Services;
 using PSK.Services.Chat;
 using PSK.Services.Configure;
+using PSK.Services.File;
 using PSK.Services.Ping;
 using System.Threading;
 using System.Threading.Channels;
@@ -47,12 +48,14 @@ namespace PSK.Server
                 .Configure<ServerOptions>(configuration.GetSection(nameof(ServerOptions)))
                 .Configure<PingServiceOptions>(configuration.GetSection(nameof(PingServiceOptions)))
                 .Configure<ChatServiceOptions>(configuration.GetSection(nameof(ChatServiceOptions)))
+                .Configure<FileServiceOptions>(configuration.GetSection(nameof(FileServiceOptions)))
                 //Client Service
                 .AddSingleton<IClientService, ClientService>()
                 //Channel
+                //TODO: Move back into wrapper RequestService for simplicity
                 .AddSingleton<Channel<Message>>(provider => {
                     var options = provider.GetRequiredService<IOptionsMonitor<MessageChannelOptions>>();
-                    return options.CurrentValue.Capacity == 0 ? 
+                    return options.CurrentValue.Capacity == 0 ?
                         Channel.CreateUnbounded<Message>() : Channel.CreateBounded<Message>(options.CurrentValue.Capacity);
                 })
                 //Listeners
@@ -66,11 +69,17 @@ namespace PSK.Server
                     var options = provider.GetRequiredService<IOptionsMonitor<PingServiceOptions>>();
                     return options.CurrentValue.IsActive ? new PingService(options) : null;
                 })
+                //TODO: Move to transient, create separate service that holds messages
                 .AddSingleton<IChatService>(provider =>
                 {
                     var options = provider.GetRequiredService<IOptionsMonitor<ChatServiceOptions>>();
                     var clientService = provider.GetRequiredService<IClientService>();
                     return options.CurrentValue.IsActive ? new ChatService(clientService) : null;
+                })
+                .AddTransient<IFileService>(provider =>
+                {
+                    var options = provider.GetRequiredService<IOptionsMonitor<FileServiceOptions>>();
+                    return options.CurrentValue.IsActive ? new FileService(options) : null;
                 })
                 //Server
                 .AddSingleton<IServer, Server>()

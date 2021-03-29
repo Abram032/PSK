@@ -2,13 +2,11 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace PSK.Core.Models.Services
+namespace PSK.Core.Models.Services.Chat
 {
     public enum ChatCommand
     {
         Get,
-        GetUsers,
         Send,
-        SetAlias
     }
 }

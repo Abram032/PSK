@@ -1,5 +1,8 @@
-﻿using PSK.Core;
+﻿using Newtonsoft.Json;
+using PSK.Core;
+using PSK.Core.Models;
 using PSK.Core.Models.Services;
+using PSK.Core.Models.Services.Chat;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -11,7 +14,7 @@ namespace PSK.Services.Chat
 {
     public class ChatService : IChatService
     {
-        private ConcurrentDictionary<string, ConcurrentQueue<string>> messages;
+        private ConcurrentDictionary<string, ConcurrentQueue<ChatMessage>> messages;
 
         private readonly IClientService _clientService;
 
@@ -19,67 +22,73 @@ namespace PSK.Services.Chat
         {
             _clientService = clientService;
 
-            messages = new ConcurrentDictionary<string, ConcurrentQueue<string>>();
+            messages = new ConcurrentDictionary<string, ConcurrentQueue<ChatMessage>>();
         }
 
-        public async Task<string> ProcessRequest(Guid clientId, string request)
+        public async Task<string> ProcessRequest(string data)
         {
-            var data = Encoding.UTF8.GetString(Convert.FromBase64String(request));
-            var command = data.Split(' ').FirstOrDefault();
-            var alias = data.Split(' ').Skip(1).FirstOrDefault();
-            var message = string.Join(' ', data.Split(' ').Skip(2));
+            var request = JsonConvert.DeserializeObject<ChatRequest>(data);
 
-            var commandEnum = Enum.Parse(typeof(ChatCommand), command, true);
-
-            string response = null;
-            switch (commandEnum)
+            Message response;
+            switch (request.Command)
             {
-                case ChatCommand.GetUsers:
-                    response = GetUsers();
-                    break;
                 case ChatCommand.Get:
-                    response = Get(clientId);
+                    response = Get(request);
                     break;
                 case ChatCommand.Send:
-                    response = Send(clientId, alias, message);
-                    break;
-                case ChatCommand.SetAlias:
-                    response = SetAlias(clientId, alias);
+                    response = Send(request);
                     break;
                 default:
-                    response = "Unknown command for Configure service";
+                    response = new Message()
+                    {
+                        Service = Service.Chat,
+                        Succeded = false,
+                        Error = "Unknown command for Chat service"
+                    };
                     break;
             }
 
-            return $"chat {response}";
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response)));
         }
 
-        private string Send(Guid senderId, string alias, string message)
+        private Message Send(ChatRequest request)
         {
-            var receiver = _clientService.GetClientByAlias(alias);
-            var sender = _clientService.GetClientById(senderId);
-            if (receiver == null || sender == null)
+            var response = new Message()
             {
-                return "Could not find user with given alias";
+                Service = Service.Chat,
+                Succeded = false,
+            };
+
+            if(!messages.ContainsKey(request.Message.Receiver) && !messages.TryAdd(request.Message.Receiver, new ConcurrentQueue<ChatMessage>()))
+            {
+                response.Error = "Could not send message to user with given alias";
+                return response;
             }
 
-            if(!messages.ContainsKey(alias) ||
-                !messages.TryAdd(alias, new ConcurrentQueue<string>()) ||
-                !messages.TryGetValue(alias, out var _messages))
+            if (!messages.TryGetValue(request.Message.Receiver, out var _messages))
             {
-                return "Could not send message to user.";
+                response.Error = "Could not send message to user with given alias";
+                return response;
             }
 
-             _messages.Enqueue($"({sender.Alias}): {message}");
-            return $"Message sent to {alias}";
+             _messages.Enqueue(request.Message);
+            response.Succeded = true;
+            response.Data = $"Message sent to {request.Message.Receiver}";
+            return response;
         }
 
-        private string Get(Guid clientId)
+        private Message Get(ChatRequest request)
         {
-            var client = _clientService.GetClientById(clientId);
-            if (!messages.TryGetValue(client.Alias, out var _messages))
+            var message = new Message()
             {
-                return "Could not receive messages.";
+                Service = Service.Chat,
+                Succeded = false,
+            };
+
+            if (!messages.TryGetValue(request.Alias, out var _messages))
+            {
+                message.Error = "Could not receive messages.";
+                return message;
             }
 
             var stringBuilder = new StringBuilder();
@@ -88,39 +97,13 @@ namespace PSK.Services.Chat
             {
                 if(_messages.TryDequeue(out var _message))
                 {
-                    stringBuilder.AppendLine(_message);
+                    stringBuilder.AppendLine($"{_message.Timestamp.ToShortTimeString()} ({_message.Sender}): {_message.Content}");
                 }
             }
 
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(stringBuilder.ToString()));
-        }
-
-        private string GetUsers()
-        {
-            var clients =_clientService.GetClients();
-
-            var stringBuilder = new StringBuilder();
-            stringBuilder.AppendLine($"Connected users ({clients.Count()}):");
-            foreach(var client in clients)
-            {
-                stringBuilder.AppendLine(client);
-            }
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(stringBuilder.ToString()));
-        }
-
-        private string SetAlias(Guid clientId, string alias)
-        {
-            if(_clientService.ClientAliasExists(alias))
-            {
-                return "Client alias already exists.";
-            }
-
-            if(!_clientService.SetClientAlias(clientId, alias))
-            {
-                return "Could not set client alias.";
-            }
-
-            return $"Alias set to {alias}";
+            message.Succeded = true;
+            message.Data = stringBuilder.ToString();
+            return message;
         }
     }
 }

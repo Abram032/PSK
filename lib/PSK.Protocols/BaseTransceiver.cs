@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using PSK.Core;
 using PSK.Core.Models;
 using PSK.Protocols.Tcp;
@@ -34,7 +35,7 @@ namespace PSK.Protocols
 
         public abstract Task Transmit(string data);
 
-        protected abstract ValueTask ProcessMessage(Guid clientId, string command, string data);
+        protected abstract ValueTask ProcessMessage(Message message);
 
         protected virtual void DisconnectClient() { }
 
@@ -61,7 +62,7 @@ namespace PSK.Protocols
             }
             catch (Exception e)
             {
-                LogException(e.Message);
+                await LogException(e.Message);
             }
             finally
             {
@@ -71,7 +72,7 @@ namespace PSK.Protocols
             }
         }
 
-        protected virtual void LogException(string message)
+        protected virtual async Task LogException(string message)
         {
             Console.WriteLine(message);
         }
@@ -123,12 +124,25 @@ namespace PSK.Protocols
                 stringBuilder.Append(Encoding.ASCII.GetString(segment.Span));
             }
             var parsedData = stringBuilder.ToString();
-            await ProcessMessage(clientId, parsedCommand, parsedData);
+            await ProcessMessage(new Message
+            { 
+                Service = Enum.Parse(typeof(Service), parsedCommand, true) as Service?,
+                Data = parsedData,
+                ClientId = clientId
+            });
         }
 
-        protected virtual Task ProcessCommandlessLine(Guid clientId, ReadOnlySequence<byte> line)
+        protected virtual ValueTask ProcessCommandlessLine(Guid clientId, ReadOnlySequence<byte> line)
         {
-            return Transmit("Bad request. Invalid amount of arguments.");
+            var stringBuilder = new StringBuilder();
+            foreach (var segment in line)
+            {
+                stringBuilder.Append(Encoding.ASCII.GetString(segment.Span));
+            }
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(stringBuilder.ToString()));
+            var message = JsonConvert.DeserializeObject<Message>(json);
+            message.ClientId = clientId;
+            return ProcessMessage(message);
         }
     }
 }

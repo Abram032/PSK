@@ -5,6 +5,6 @@ namespace PSK.Services
 {
     public interface IService
     {
-        Task<string> ProcessRequest(Guid clientId, string request);
+        Task<string> ProcessRequest(string request);
     }
 }
