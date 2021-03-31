@@ -73,7 +73,7 @@ namespace PSK.Services.Chat
 
              _messages.Enqueue(request.Message);
             response.Succeded = true;
-            response.Data = $"Message sent to {request.Message.Receiver}";
+            response.Data = $"Message sent to '{request.Message.Receiver}'";
             return response;
         }
 

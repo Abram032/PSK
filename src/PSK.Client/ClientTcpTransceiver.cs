@@ -27,6 +27,7 @@ namespace PSK.Client
         {
             stopwatch = new Stopwatch();
         }
+        //TODO: Make client synchronous
         public override void Start(object client = null)
         {
             cancellationTokenSource = new CancellationTokenSource();
@@ -38,7 +39,7 @@ namespace PSK.Client
             }
 
             var reader = PipeReader.Create(this.client.GetStream());
-            Task.Factory.StartNew(() => Receive(reader), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            //Task.Factory.StartNew(() => Receive(reader), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             Active = true;
         }
@@ -113,6 +114,7 @@ namespace PSK.Client
             }
         }
 
+        //TODO: Remove console actions, move to separate function that renders them
         protected override async ValueTask ProcessMessage(Message message)
         {
             stopwatch.Stop();

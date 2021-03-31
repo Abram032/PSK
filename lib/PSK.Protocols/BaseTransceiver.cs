@@ -93,6 +93,7 @@ namespace PSK.Protocols
 
         protected virtual async ValueTask ProcessLine(Guid clientId, ReadOnlySequence<byte> line)
         {
+            //ping 200
             SequencePosition? position = line.PositionOf((byte)' ');
             if (!position.HasValue)
             {
